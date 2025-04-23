@@ -5270,7 +5270,7 @@ function RealTimeMonitoring() {
             }
             const No_Decoder_handlers = {
                 'detect aad, o365 sign-in from risky countries': Risky_Countries_AlertHandler,
-                'successful azure/o365 login from malware-ip': Risky_Countries_AlertHandler,
+                'o365 login from malware-ip': Risky_Countries_AlertHandler,
                 'rarely country signin from o365': Risky_Countries_AlertHandler,
                 'agent disconnected': Agent_Disconnect_AlertHandler,
                 'suspicious geolocation ip login success': PulseAlertHandler,
