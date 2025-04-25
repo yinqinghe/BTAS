@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         BTAS
-// @namespace    https://github.com/Mr-Tree-S/BTAS
-// @homepageURL  https://github.com/Mr-Tree-S/BTAS
+// @namespace    https://github.com/yinqinghe/BTAS
+// @homepageURL  https://github.com/yinqinghe/BTAS
 // @version      4.1.1
 // @description  Blue Team Auxiliary Script
 // @author       Barry, Jack, Xingyu, Mike
 // @license      Apache-2.0
-// @updateURL    https://raw.githubusercontent.com/Mr-Tree-S/BTAS/main/BTAS.js
-// @downloadURL  https://raw.githubusercontent.com/Mr-Tree-S/BTAS/main/BTAS.js
+// @updateURL    https://raw.githubusercontent.com/yinqinghe/BTAS/refs/heads/main/BTAS.js
+// @downloadURL  https://raw.githubusercontent.com/yinqinghe/BTAS/refs/heads/main/BTAS.js
 // @match        https://login.microsoftonline.com/*
 // @match        https://security.microsoft.com/*
 // @include      https://caas*.com/*
@@ -2101,13 +2101,21 @@ function AwsAlertHandler(...kwargs) {
                             content = item.value;
                         }
                     });
+                    let httpRequest = aws.logEvents.message.httpRequest;
+                    const headersDict = httpRequest.headers.reduce((dict, item) => {
+                        dict[item.name] = item.value;
+                        return dict;
+                    }, {});
                     acc.push({
-                        log_file: aws.log_info.log_file,
-                        clientIp: aws.logEvents.message.httpRequest.clientIp,
-                        httpMethod: aws.logEvents.message.httpRequest.httpMethod,
-                        uri: aws.logEvents.message.httpRequest.uri,
-                        host: host,
-                        content_type: content
+                        'log_file': aws.log_info.log_file,
+                        'clientIp': httpRequest.clientIp,
+                        'httpMethod': httpRequest.httpMethod,
+                        'uri': httpRequest.uri,
+                        'Ali-Swift-Log-Host': headersDict['Ali-Swift-Log-Host'],
+                        'X-Forwarded-For': headersDict['X-Forwarded-For'],
+                        'X-Middleware-Subrequest': headersDict['X-Middleware-Subrequest'],
+                        'host': host,
+                        'content_type': content
                     });
                 } else {
                     acc.push({
