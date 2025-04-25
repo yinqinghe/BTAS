@@ -2114,6 +2114,9 @@ function AwsAlertHandler(...kwargs) {
                         'Ali-Swift-Log-Host': headersDict['Ali-Swift-Log-Host'],
                         'X-Forwarded-For': headersDict['X-Forwarded-For'],
                         'X-Middleware-Subrequest': headersDict['X-Middleware-Subrequest'],
+                        'cookie': headersDict['cookie'],
+                        'referer': headersDict['referer'],
+                        'user-agent': headersDict['user-agent'],
                         'host': host,
                         'content_type': content
                     });
