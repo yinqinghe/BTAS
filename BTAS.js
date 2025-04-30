@@ -3970,7 +3970,7 @@ function MDE365AlertHandler(...kwargs) {
                                         description = `filename: ${evidenceItem.fileName}\nfilePath: ${evidenceItem.filePath}`;
                                         tmp.push(description);
                                     } else {
-                                        description = `File : ${evidenceItem.filePath}\\\\${evidenceItem.fileName}\nsha1: ${evidenceItem.sha1}`;
+                                        description = `File : ${evidenceItem.filePath}\\\\${evidenceItem.fileName}\ndetectionStatus:${evidenceItem.detectionStatus}\nsha1: ${evidenceItem.sha1}`;
                                         tmp.push(description);
                                     }
                                 }
@@ -4078,7 +4078,8 @@ function MDE365AlertHandler(...kwargs) {
                                         const fileEntry = {
                                             // filename: entity['fileName'],
                                             // filePath: entity['filePath']
-                                            File: `${entity['filePath']}\\\\${entity['fileName']}`
+                                            File: `${entity['filePath']}\\\\${entity['fileName']}`,
+                                            detectionStatus: entity['detectionStatus']
                                         };
                                         if (
                                             Object.keys(entity).includes('sha256') &&
