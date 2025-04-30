@@ -3949,13 +3949,14 @@ function MDE365AlertHandler(...kwargs) {
                     }
                     if (logObj['integration'] == 'Wazuh-MDE') {
                         raw_alert += 1;
-                        const { mde } = logObj;
-                        const { title, id, computerDnsName, relatedUser, evidence, alertCreationTime } = mde;
+                        let { title, computerDnsName, relatedUser, evidence, alertCreationTime, loggedOnUsers } =
+                            logObj['mde'];
                         let dotIndex = alertCreationTime.lastIndexOf('.');
 
                         let dateTimeStr = GMT8(alertCreationTime.slice(0, dotIndex));
-                        const alert = { title, id, computerDnsName, dateTimeStr };
+                        const alert = { title, Host: computerDnsName, dateTimeStr };
                         const userName = relatedUser ? relatedUser.userName : 'N/A';
+                        let loggedOnUser = `${loggedOnUsers[0].domainName}\\\\${loggedOnUsers[0].accountName}`;
                         let extrainfo = '';
                         let processCommandLine = '';
                         if (evidence) {
@@ -3969,7 +3970,7 @@ function MDE365AlertHandler(...kwargs) {
                                         description = `filename: ${evidenceItem.fileName}\nfilePath: ${evidenceItem.filePath}`;
                                         tmp.push(description);
                                     } else {
-                                        description = `filename: ${evidenceItem.fileName}\nfilePath: ${evidenceItem.filePath}\nsha1: ${evidenceItem.sha1}`;
+                                        description = `File : ${evidenceItem.filePath}\\\\${evidenceItem.fileName}\nsha1: ${evidenceItem.sha1}`;
                                         tmp.push(description);
                                     }
                                 }
@@ -4013,14 +4014,24 @@ function MDE365AlertHandler(...kwargs) {
                             const uniqueDescriptions = Array.from(new Set(tmp));
                             extrainfo = uniqueDescriptions.join('\n');
                         }
-                        alertInfo_MDE.push({ ...alert, userName, extrainfo });
+                        alertInfo_MDE.push({ ...alert, userName, loggedOnUser, extrainfo });
                     } else {
                         raw_alert += 1;
                         const alerts = logObj['incidents']['alerts'][0];
                         console.log(alerts);
-                        let entities = {};
+                        let devices = {},
+                            entities = {};
                         logObj['incidents']['alerts'].forEach(function (alert, index) {
                             if (alert !== undefined) {
+                                alert['devices'].forEach(function (device) {
+                                    devices['deviceDnsName'] = device['deviceDnsName'];
+                                    let loggedOnUsers = device['loggedOnUsers'][0];
+                                    if (loggedOnUsers) {
+                                        devices[
+                                            'loggedOnUsers'
+                                        ] = `${loggedOnUsers['domainName']}\\\\${loggedOnUsers['accountName']}`;
+                                    }
+                                });
                                 alert['entities'].forEach(function (entity) {
                                     if (entity.processCommandLine !== undefined) {
                                         processCommandLine = entity.processCommandLine.replace(/\r\n\r\n+/g, '\n');
@@ -4065,8 +4076,9 @@ function MDE365AlertHandler(...kwargs) {
                                             entities['file'] = [];
                                         }
                                         const fileEntry = {
-                                            filename: entity['fileName'],
-                                            filePath: entity['filePath']
+                                            // filename: entity['fileName'],
+                                            // filePath: entity['filePath']
+                                            File: `${entity['filePath']}\\\\${entity['fileName']}`
                                         };
                                         if (
                                             Object.keys(entity).includes('sha256') &&
@@ -4122,7 +4134,8 @@ function MDE365AlertHandler(...kwargs) {
                             creationTime: creationTime,
                             Title: title,
                             summary: logObj['incidents'].incidentName,
-                            host: alerts?.devices[0]?.deviceDnsName,
+                            Host: devices['deviceDnsName'],
+                            loggedOnUsers: devices['loggedOnUsers'],
                             user: entities.user,
                             userPrincipalName: entities.userPrincipalName,
                             process: entities.process,
@@ -4152,8 +4165,31 @@ function MDE365AlertHandler(...kwargs) {
 
     function generateDescription_MDE() {
         for (const info of alertInfo_MDE) {
-            const { title, computerDnsName, userName, extrainfo, dateTimeStr } = info;
-            const desc = `Observed ${title}\nalertCreationTime(<span class="red_highlight">GMT+8</span>): ${dateTimeStr}\nHost: ${computerDnsName}\nusername: ${userName}\n${extrainfo}\n\nPlease help to verify if it is legitimate.\n`;
+            let desc = `Observed ${info.title}\n`;
+
+            for (let key in info) {
+                if (info.hasOwnProperty(key)) {
+                    if (Array.isArray(info[key])) {
+                        info[key].forEach((item) => {
+                            desc += '\n';
+                            for (let subKey in item) {
+                                if (item.hasOwnProperty(subKey) && item[subKey] !== '') {
+                                    desc += `${subKey}: ${item[subKey]}\n`;
+                                }
+                            }
+                        });
+                    } else {
+                        if (info[key] !== undefined && info[key] !== 'N/A' && key !== 'extrainfo' && key !== 'title') {
+                            if (key == 'dateTimeStr') {
+                                desc += `creationTime(<span class="red_highlight">GMT+8</span>): ${info[key]}\n`;
+                            } else {
+                                desc += `${key}: ${info[key]}\n`;
+                            }
+                        }
+                    }
+                }
+            }
+            desc += `${info.extrainfo}\n\nPlease help to verify if it is legitimate.\n`;
             alertDescriptions.push(desc);
         }
     }
