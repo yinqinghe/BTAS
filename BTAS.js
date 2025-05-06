@@ -4156,6 +4156,13 @@ function MDE365AlertHandler(...kwargs) {
                                     alert_single['Title'] = alert['title'];
                                 }
                                 alert_single['alertId'] = alert['alertId'];
+                                function deduplicateObjects(array) {
+                                    return array.filter((item, index) => {
+                                        const itemStr = JSON.stringify(item);
+                                        return index === array.findIndex((obj) => JSON.stringify(obj) === itemStr);
+                                    });
+                                }
+                                entities.process = deduplicateObjects(entities.process);
                                 Object.assign(alert_single, devices, entities);
                                 alert_single['description'] = alert['description'] || undefined;
                                 alerts.push(alert_single);
@@ -4226,115 +4233,64 @@ function MDE365AlertHandler(...kwargs) {
         }
     }
     function generateDescription_365() {
-        if (summary.includes('M365 Defender High Severity Alerts: Logon from a risky country involving one user')) {
-            const ticketnumber = $('#key-val').text();
-            for (const info of alertInfo) {
-                let desc = `Dear Customer,
-	 
-	            Reasons for escalating:
-	             
-	            Observed Logon from a risky country involving one user in [time]
-	             
-	            Here is information about this login:
-	
-	            creationTime(<span class="red_highlight"">GMT</span>): ${info.creationTime}
-	             
-	            source IP: ${info.ip[0].ip}
-	             
-	            user: ${info.user}
-	             
-	            active: Microsoft 365
-	             
-	            userPrincipalName: ${info.userPrincipalName}
-	             
-	            Device type:
-	             
-	            UserAgent:
-	             
-	            location:
-	             
-	            logging status:
-	             
-	            LoginStatus:
-	             
-	            MfaRequired:
-	             
-	            the user suddenly logged in from [Location1] but the user used to be logged in from [Location2], aberdeen. Please confirm whether the login behavior of the user is normal.if not, could block the ip.
-	             
-	             
-	            Suggestion: We suggest to confirm whether the behavior of this customer logging in at ${info.ip[0].ip}: is normal or not, if not, we suggest to block the IP and change the user's password and perform a full scan on the user's commonly used PCs, thank you!
-	             
-	            Severity: ${info.severity}
-	             
-	            Correlation ticket: ${ticketnumber}
-	            
-	            `;
-                alertDescriptions.push(desc);
-            }
-        } else {
-            for (const info of alertInfo_365) {
-                let desc = `Observed ${info.summary}\n`;
-                try {
-                    for (let key in info) {
-                        if (Array.isArray(info[key])) {
-                            info[key].forEach((item) => {
-                                desc += '\n';
-                                for (let subKey in item) {
-                                    console.log('===subKey', item[subKey], subKey);
-                                    if (Array.isArray(item[subKey])) {
-                                        item[subKey].forEach((i) => {
-                                            desc += '\n';
-                                            for (let subKey in i) {
-                                                if (i[subKey] !== '' && i[subKey] !== undefined) {
-                                                    desc += `${subKey}: ${i[subKey]}\n`;
-                                                }
+        for (const info of alertInfo_365) {
+            let desc = `Observed ${info.summary}\n`;
+            try {
+                for (let key in info) {
+                    if (Array.isArray(info[key])) {
+                        info[key].forEach((item) => {
+                            desc += '\n';
+                            for (let subKey in item) {
+                                console.log('===subKey', item[subKey], subKey);
+                                if (Array.isArray(item[subKey])) {
+                                    item[subKey].forEach((i) => {
+                                        desc += '\n';
+                                        for (let subKey in i) {
+                                            if (i[subKey] !== '' && i[subKey] !== undefined) {
+                                                desc += `${subKey}: ${i[subKey]}\n`;
                                             }
-                                        });
-                                    } else if (
-                                        item[subKey] !== '' &&
-                                        item[subKey] !== undefined &&
-                                        subKey !== 'alertId'
-                                    ) {
-                                        desc += `${subKey}: ${item[subKey]}\n`;
-                                    }
+                                        }
+                                    });
+                                } else if (item[subKey] !== '' && item[subKey] !== undefined && subKey !== 'alertId') {
+                                    desc += `${subKey}: ${item[subKey]}\n`;
                                 }
-                            });
-                        } else {
-                            if (
-                                info[key] !== undefined &&
-                                info[key] !== ' ' &&
-                                key !== 'summary' &&
-                                key !== 'alertid' &&
-                                key !== 'incidenturi'
-                            ) {
-                                if (key == 'creationTime') {
-                                    desc += `creationTime(<span class="red_highlight">GMT+8</span>): ${info[key]}\n`;
-                                } else {
-                                    desc += `${key}: ${info[key]}\n`;
-                                }
+                            }
+                        });
+                    } else {
+                        if (
+                            info[key] !== undefined &&
+                            info[key] !== ' ' &&
+                            key !== 'summary' &&
+                            key !== 'alertid' &&
+                            key !== 'incidenturi'
+                        ) {
+                            if (key == 'creationTime') {
+                                desc += `creationTime(<span class="red_highlight">GMT+8</span>): ${info[key]}\n`;
+                            } else {
+                                desc += `${key}: ${info[key]}\n`;
                             }
                         }
                     }
-                } catch (error) {
-                    console.error(`Error: ${error}`);
                 }
-                let MDEURL = '';
-                const cachedMappingContent = GM_getValue('cachedMappingContent', null);
-
-                if (LogSourceDomain == cachedMappingContent['wwa']) {
-                    if (info.alertid && !MDEURL.includes(info.alertid)) {
-                        MDEURL += `https://security.microsoft.com/alerts/${info.alertid}<br>`;
-                    }
-                    if (info.incidenturi) {
-                        let incident_url = info.incidenturi.replace('hXXps[:]', 'https:') + '<br>';
-                        MDEURL += incident_url;
-                    }
-                    desc += `MDE URL: \n${MDEURL}\n`;
-                }
-
-                desc += `\nPlease verify if the activity is legitimate.\n`;
-                alertDescriptions.push(desc);
+            } catch (error) {
+                console.error(`Error: ${error}`);
             }
+            let MDEURL = '';
+            const cachedMappingContent = GM_getValue('cachedMappingContent', null);
+
+            if (LogSourceDomain == cachedMappingContent['wwa']) {
+                if (info.alertid && !MDEURL.includes(info.alertid)) {
+                    MDEURL += `https://security.microsoft.com/alerts/${info.alertid}<br>`;
+                }
+                if (info.incidenturi) {
+                    let incident_url = info.incidenturi.replace('hXXps[:]', 'https:') + '<br>';
+                    MDEURL += incident_url;
+                }
+                desc += `MDE URL: \n${MDEURL}\n`;
+            }
+
+            desc += `\nPlease verify if the activity is legitimate.\n`;
+            alertDescriptions.push(desc);
         }
     }
     function generateDescription() {
