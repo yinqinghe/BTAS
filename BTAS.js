@@ -3955,10 +3955,9 @@ function MDE365AlertHandler(...kwargs) {
 
                         let dateTimeStr = GMT8(alertCreationTime.slice(0, dotIndex));
                         const alert = { title, Host: computerDnsName, dateTimeStr, id };
-                        const userName = relatedUser ? relatedUser.userName : 'N/A';
                         let loggedOnUser = 'N/A';
                         if (loggedOnUsers.length != 0) {
-                            loggedOnUser = `${loggedOnUsers[0].domainName}\\\\${loggedOnUsers[0].accountName}`;
+                            loggedOnUser = `${loggedOnUsers[0].accountName}\\\\${loggedOnUsers[0].domainName}(DomainName)`;
                         }
                         let extrainfo = '';
                         let processCommandLine = '';
@@ -3967,10 +3966,10 @@ function MDE365AlertHandler(...kwargs) {
                             for (const evidenceItem of evidence) {
                                 let description = '';
                                 if (evidenceItem.entityType === 'User') {
-                                    if ('userPrincipalName' in entity || 'domainName' in entity) {
+                                    if ('userPrincipalName' in evidenceItem) {
                                         description = `user : ${evidenceItem.userPrincipalName}\\\\${evidenceItem.domainName}(DomainName)\n`;
                                     } else {
-                                        description = `user : ${evidenceItem.accountName}\nuserSid:${evidenceItem.userSid}\n`;
+                                        description = `user : ${evidenceItem.accountName}\\\\${evidenceItem.domainName}(DomainName)\nuserSid:${evidenceItem.userSid}\n`;
                                     }
                                     tmp.push(description);
                                 }
@@ -3980,7 +3979,7 @@ function MDE365AlertHandler(...kwargs) {
                                         description = `filename: ${evidenceItem.fileName}\nfilePath: ${evidenceItem.filePath}`;
                                         tmp.push(description);
                                     } else {
-                                        description = `File : ${evidenceItem.filePath}\\\\${evidenceItem.fileName}\ndetectionStatus:${evidenceItem.detectionStatus}\nsha1: ${evidenceItem.sha1}\ndeviceId:${evidenceItem.deviceId}`;
+                                        description = `File : ${evidenceItem.filePath}\\\\${evidenceItem.fileName}\nsha1: ${evidenceItem.sha1}\n`;
                                         tmp.push(description);
                                     }
                                 }
@@ -4024,22 +4023,21 @@ function MDE365AlertHandler(...kwargs) {
                             const uniqueDescriptions = Array.from(new Set(tmp));
                             extrainfo = uniqueDescriptions.join('\n');
                         }
-                        alertInfo_MDE.push({ ...alert, userName, loggedOnUser, extrainfo });
+                        alertInfo_MDE.push({ ...alert, loggedOnUser, extrainfo });
                     } else {
                         raw_alert += 1;
-                        const alerts = logObj['incidents']['alerts'][0];
-                        console.log(alerts);
-                        let devices = {},
-                            entities = {};
+                        let alerts = [];
                         logObj['incidents']['alerts'].forEach(function (alert, index) {
+                            let entities = {},
+                                devices = {};
                             if (alert !== undefined) {
                                 alert['devices'].forEach(function (device) {
-                                    devices['deviceDnsName'] = device['deviceDnsName'];
+                                    devices['Host'] = device['deviceDnsName'];
                                     let loggedOnUsers = device['loggedOnUsers'][0];
                                     if (loggedOnUsers) {
                                         devices[
                                             'loggedOnUsers'
-                                        ] = `${loggedOnUsers['domainName']}\\\\${loggedOnUsers['accountName']}`;
+                                        ] = `${loggedOnUsers['accountName']}\\\\${loggedOnUsers['domainName']}(DomainName)`;
                                     }
                                 });
                                 alert['entities'].forEach(function (entity) {
@@ -4052,19 +4050,18 @@ function MDE365AlertHandler(...kwargs) {
                                             entities['user'] = [];
                                         }
                                         let userEntry = {};
-                                        if ('userPrincipalName' in entity || 'domainName' in entity) {
+                                        if ('userPrincipalName' in entity) {
                                             userEntry = {
                                                 user: `${entity['userPrincipalName']}\\\\${entity['domainName']}(DomainName)`
                                             };
                                         } else {
                                             userEntry = {
-                                                user: entity['accountName'],
+                                                user: `${entity['accountName']}\\\\${entity['domainName']}(DomainName)`,
                                                 userSid: entity['userSid']
                                             };
                                         }
                                         entities['user'].push(userEntry);
                                     }
-                                    console.log('===', entities);
                                     if (entity['entityType'] == 'CloudApplication') {
                                         entities['applicationId'] = entity['applicationId'];
                                         entities['applicationName'] = entity['applicationName'];
@@ -4143,10 +4140,9 @@ function MDE365AlertHandler(...kwargs) {
                                             recipient: entity['recipient'],
                                             userPrincipalName: entity['userPrincipalName'],
                                             remediationStatus: entity['remediationStatus']
-                                            // recipient: entity['recipient']
                                         });
                                     }
-                                    if (entity['entityType'] == 'Registry') {
+                                    if (entity['entityType'] == 'Registry' && entity['registryKey'] != undefined) {
                                         if (!entities['registry']) {
                                             entities['registry'] = [];
                                         }
@@ -4155,33 +4151,30 @@ function MDE365AlertHandler(...kwargs) {
                                         });
                                     }
                                 });
+                                let alert_single = {};
+                                if (logObj['incidents'].incidentName != alert['title']) {
+                                    alert_single['Title'] = alert['title'];
+                                }
+                                alert_single['alertId'] = alert['alertId'];
+                                Object.assign(alert_single, devices, entities);
+                                alert_single['description'] = alert['description'] || undefined;
+                                alerts.push(alert_single);
                             }
                         });
+                        console.log('===alerts', alerts);
 
-                        let creationTime = GMT8(alerts.creationTime.split('.')[0]);
-                        let title = alerts?.title;
-                        if (summary.toLowerCase().includes(title.toLowerCase())) {
-                            title = undefined;
-                        }
+                        let creationTime = GMT8(logObj['incidents']['createdTime'].split('.')[0]);
                         alertInfo_365.push({
                             creationTime: creationTime,
-                            Title: title,
                             summary: logObj['incidents'].incidentName,
-                            Host: devices['deviceDnsName'],
-                            loggedOnUsers: devices['loggedOnUsers'],
-                            user: entities.user,
-                            process: entities.process,
-                            file: entities.file,
-                            ip: entities.ip,
-                            url: entities.url,
-                            MailMessage: entities.MailMessage,
-                            MailMessage: entities.registry,
-                            alertid: alerts?.alertId,
-                            incidenturi: logObj['incidents'].incidentUri,
-                            severity: logObj['incidents'].severity,
-                            description: alerts['description'] || undefined,
-                            applicationId: entities.applicationId,
-                            applicationName: entities.applicationName
+                            alerts: alerts,
+                            // user: entities.user,
+                            // process: entities.process,
+                            // file: entities.file,
+                            // ip: entities.ip,
+                            incidenturi: logObj['incidents'].incidentUri
+                            // applicationId: entities.applicationId,
+                            // applicationName: entities.applicationName
                         });
                     }
                 } catch (error) {
@@ -4205,6 +4198,7 @@ function MDE365AlertHandler(...kwargs) {
                         info[key].forEach((item) => {
                             desc += '\n';
                             for (let subKey in item) {
+                                console.log('===', subKey, item[subKey]);
                                 if (item.hasOwnProperty(subKey) && item[subKey] !== '' && item[subKey] !== undefined) {
                                     desc += `${subKey}: ${item[subKey]}\n`;
                                 }
@@ -4282,34 +4276,41 @@ function MDE365AlertHandler(...kwargs) {
                 let desc = `Observed ${info.summary}\n`;
                 try {
                     for (let key in info) {
-                        if (info.hasOwnProperty(key)) {
-                            if (Array.isArray(info[key])) {
-                                info[key].forEach((item) => {
-                                    desc += '\n';
-                                    for (let subKey in item) {
-                                        if (
-                                            item.hasOwnProperty(subKey) &&
-                                            item[subKey] !== '' &&
-                                            item[subKey] !== undefined
-                                        ) {
-                                            desc += `${subKey}: ${item[subKey]}\n`;
-                                        }
+                        if (Array.isArray(info[key])) {
+                            info[key].forEach((item) => {
+                                desc += '\n';
+                                for (let subKey in item) {
+                                    console.log('===subKey', item[subKey], subKey);
+                                    if (Array.isArray(item[subKey])) {
+                                        item[subKey].forEach((i) => {
+                                            desc += '\n';
+                                            for (let subKey in i) {
+                                                if (i[subKey] !== '' && i[subKey] !== undefined) {
+                                                    desc += `${subKey}: ${i[subKey]}\n`;
+                                                }
+                                            }
+                                        });
+                                    } else if (
+                                        item[subKey] !== '' &&
+                                        item[subKey] !== undefined &&
+                                        subKey !== 'alertId'
+                                    ) {
+                                        desc += `${subKey}: ${item[subKey]}\n`;
                                     }
-                                });
-                            } else {
-                                if (
-                                    info[key] !== undefined &&
-                                    info[key] !== ' ' &&
-                                    key !== 'summary' &&
-                                    key !== 'alertid' &&
-                                    key !== 'incidenturi' &&
-                                    key !== 'severity'
-                                ) {
-                                    if (key == 'creationTime') {
-                                        desc += `creationTime(<span class="red_highlight">GMT+8</span>): ${info[key]}\n`;
-                                    } else {
-                                        desc += `${key}: ${info[key]}\n`;
-                                    }
+                                }
+                            });
+                        } else {
+                            if (
+                                info[key] !== undefined &&
+                                info[key] !== ' ' &&
+                                key !== 'summary' &&
+                                key !== 'alertid' &&
+                                key !== 'incidenturi'
+                            ) {
+                                if (key == 'creationTime') {
+                                    desc += `creationTime(<span class="red_highlight">GMT+8</span>): ${info[key]}\n`;
+                                } else {
+                                    desc += `${key}: ${info[key]}\n`;
                                 }
                             }
                         }
@@ -4356,12 +4357,14 @@ function MDE365AlertHandler(...kwargs) {
             }
         }
         for (const info of alertInfo_365) {
-            const { alertid, incidenturi } = info;
-            if (alertid && !MDEURL.includes(alertid)) {
-                MDEURL += `https://security.microsoft.com/alerts/${alertid}<br>`;
-            }
-            if (incidenturi) {
-                let incident_url = incidenturi.replace('hXXps[:]', 'https:') + '<br>';
+            console.log('===', info);
+            info.alerts.forEach((alert) => {
+                if (alert.alertId) {
+                    MDEURL += `https://security.microsoft.com/alerts/${alert.alertId}<br>`;
+                }
+            });
+            if (info.incidenturi) {
+                let incident_url = info.incidenturi.replace('hXXps[:]', 'https:') + '<br>';
                 MDEURL += incident_url;
             }
         }
