@@ -3949,28 +3949,38 @@ function MDE365AlertHandler(...kwargs) {
                     }
                     if (logObj['integration'] == 'Wazuh-MDE') {
                         raw_alert += 1;
-                        let { title, computerDnsName, relatedUser, evidence, alertCreationTime, loggedOnUsers } =
+                        let { title, computerDnsName, relatedUser, evidence, alertCreationTime, loggedOnUsers, id } =
                             logObj['mde'];
                         let dotIndex = alertCreationTime.lastIndexOf('.');
 
                         let dateTimeStr = GMT8(alertCreationTime.slice(0, dotIndex));
-                        const alert = { title, Host: computerDnsName, dateTimeStr };
+                        const alert = { title, Host: computerDnsName, dateTimeStr, id };
                         const userName = relatedUser ? relatedUser.userName : 'N/A';
-                        let loggedOnUser = `${loggedOnUsers[0].domainName}\\\\${loggedOnUsers[0].accountName}`;
+                        let loggedOnUser = 'N/A';
+                        if (loggedOnUsers.length != 0) {
+                            loggedOnUser = `${loggedOnUsers[0].domainName}\\\\${loggedOnUsers[0].accountName}`;
+                        }
                         let extrainfo = '';
                         let processCommandLine = '';
                         if (evidence) {
                             const tmp = [];
                             for (const evidenceItem of evidence) {
                                 let description = '';
-
+                                if (evidenceItem.entityType === 'User') {
+                                    if ('userPrincipalName' in entity || 'domainName' in entity) {
+                                        description = `user : ${evidenceItem.userPrincipalName}\\\\${evidenceItem.domainName}(DomainName)\n`;
+                                    } else {
+                                        description = `user : ${evidenceItem.accountName}\nuserSid:${evidenceItem.userSid}\n`;
+                                    }
+                                    tmp.push(description);
+                                }
                                 if (evidenceItem.entityType === 'File') {
                                     console.log('===', WhiteFilehash(evidenceItem.sha1));
                                     if (WhiteFilehash(evidenceItem.sha1) || WhiteFilehash(evidenceItem.sha256)) {
                                         description = `filename: ${evidenceItem.fileName}\nfilePath: ${evidenceItem.filePath}`;
                                         tmp.push(description);
                                     } else {
-                                        description = `File : ${evidenceItem.filePath}\\\\${evidenceItem.fileName}\ndetectionStatus:${evidenceItem.detectionStatus}\nsha1: ${evidenceItem.sha1}`;
+                                        description = `File : ${evidenceItem.filePath}\\\\${evidenceItem.fileName}\ndetectionStatus:${evidenceItem.detectionStatus}\nsha1: ${evidenceItem.sha1}\ndeviceId:${evidenceItem.deviceId}`;
                                         tmp.push(description);
                                     }
                                 }
@@ -3998,7 +4008,7 @@ function MDE365AlertHandler(...kwargs) {
                                         description = `cmd: ${processCommandLine}\naccount: ${evidenceItem.accountName}`;
                                         tmp.push(description);
                                     } else {
-                                        description = `cmd: ${processCommandLine}\naccount: ${evidenceItem.accountName}\nsha1: ${evidenceItem.sha1}`;
+                                        description = `cmd: ${processCommandLine}\naccount: ${evidenceItem.accountName}\nsha1: ${evidenceItem.sha1}\n`;
                                         tmp.push(description);
                                     }
                                 }
@@ -4038,9 +4048,23 @@ function MDE365AlertHandler(...kwargs) {
                                         console.log(processCommandLine);
                                     }
                                     if (entity['entityType'] == 'User' || entity['entityType'] == 'Mailbox') {
-                                        entities['user'] = `${entity['domainName']}\\\\${entity['accountName']}`;
-                                        entities['userPrincipalName'] = entity['userPrincipalName'];
+                                        if (!entities['user']) {
+                                            entities['user'] = [];
+                                        }
+                                        let userEntry = {};
+                                        if ('userPrincipalName' in entity || 'domainName' in entity) {
+                                            userEntry = {
+                                                user: `${entity['userPrincipalName']}\\\\${entity['domainName']}(DomainName)`
+                                            };
+                                        } else {
+                                            userEntry = {
+                                                user: entity['accountName'],
+                                                userSid: entity['userSid']
+                                            };
+                                        }
+                                        entities['user'].push(userEntry);
                                     }
+                                    console.log('===', entities);
                                     if (entity['entityType'] == 'CloudApplication') {
                                         entities['applicationId'] = entity['applicationId'];
                                         entities['applicationName'] = entity['applicationName'];
@@ -4050,8 +4074,8 @@ function MDE365AlertHandler(...kwargs) {
                                             entities['process'] = [];
                                         }
                                         const fileEntry = {
-                                            filename: entity['fileName'],
-                                            filePath: entity['filePath'],
+                                            File: `${entity['filePath']}\\\\${entity['fileName']}`,
+                                            detectionStatus: entity['detectionStatus'],
                                             cmd: processCommandLine
                                         };
                                         if (processCommandLine.includes('EncodedCommand')) {
@@ -4079,7 +4103,8 @@ function MDE365AlertHandler(...kwargs) {
                                             // filename: entity['fileName'],
                                             // filePath: entity['filePath']
                                             File: `${entity['filePath']}\\\\${entity['fileName']}`,
-                                            detectionStatus: entity['detectionStatus']
+                                            detectionStatus: entity['detectionStatus'],
+                                            deviceId: entity['deviceId']
                                         };
                                         if (
                                             Object.keys(entity).includes('sha256') &&
@@ -4121,7 +4146,14 @@ function MDE365AlertHandler(...kwargs) {
                                             // recipient: entity['recipient']
                                         });
                                     }
-                                    console.log('===', entities['MailMessage']);
+                                    if (entity['entityType'] == 'Registry') {
+                                        if (!entities['registry']) {
+                                            entities['registry'] = [];
+                                        }
+                                        entities['registry'].push({
+                                            registryKey: `${entity['registryHive']}\\\\${entity['registryKey']}`
+                                        });
+                                    }
                                 });
                             }
                         });
@@ -4138,13 +4170,12 @@ function MDE365AlertHandler(...kwargs) {
                             Host: devices['deviceDnsName'],
                             loggedOnUsers: devices['loggedOnUsers'],
                             user: entities.user,
-                            userPrincipalName: entities.userPrincipalName,
                             process: entities.process,
                             file: entities.file,
                             ip: entities.ip,
                             url: entities.url,
-
                             MailMessage: entities.MailMessage,
+                            MailMessage: entities.registry,
                             alertid: alerts?.alertId,
                             incidenturi: logObj['incidents'].incidentUri,
                             severity: logObj['incidents'].severity,
@@ -4174,13 +4205,19 @@ function MDE365AlertHandler(...kwargs) {
                         info[key].forEach((item) => {
                             desc += '\n';
                             for (let subKey in item) {
-                                if (item.hasOwnProperty(subKey) && item[subKey] !== '') {
+                                if (item.hasOwnProperty(subKey) && item[subKey] !== '' && item[subKey] !== undefined) {
                                     desc += `${subKey}: ${item[subKey]}\n`;
                                 }
                             }
                         });
                     } else {
-                        if (info[key] !== undefined && info[key] !== 'N/A' && key !== 'extrainfo' && key !== 'title') {
+                        if (
+                            info[key] !== undefined &&
+                            info[key] !== 'N/A' &&
+                            key !== 'extrainfo' &&
+                            key !== 'title' &&
+                            key !== 'id'
+                        ) {
                             if (key == 'dateTimeStr') {
                                 desc += `creationTime(<span class="red_highlight">GMT+8</span>): ${info[key]}\n`;
                             } else {
@@ -4250,7 +4287,11 @@ function MDE365AlertHandler(...kwargs) {
                                 info[key].forEach((item) => {
                                     desc += '\n';
                                     for (let subKey in item) {
-                                        if (item.hasOwnProperty(subKey) && item[subKey] !== '') {
+                                        if (
+                                            item.hasOwnProperty(subKey) &&
+                                            item[subKey] !== '' &&
+                                            item[subKey] !== undefined
+                                        ) {
                                             desc += `${subKey}: ${item[subKey]}\n`;
                                         }
                                     }
