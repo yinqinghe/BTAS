@@ -4162,7 +4162,9 @@ function MDE365AlertHandler(...kwargs) {
                                         return index === array.findIndex((obj) => JSON.stringify(obj) === itemStr);
                                     });
                                 }
-                                entities.process = deduplicateObjects(entities.process);
+                                if (entities.process) {
+                                    entities.process = deduplicateObjects(entities.process);
+                                }
                                 Object.assign(alert_single, devices, entities);
                                 alert_single['description'] = alert['description'] || undefined;
                                 alerts.push(alert_single);
@@ -4313,7 +4315,6 @@ function MDE365AlertHandler(...kwargs) {
             }
         }
         for (const info of alertInfo_365) {
-            console.log('===', info);
             info.alerts.forEach((alert) => {
                 if (alert.alertId) {
                     MDEURL += `https://security.microsoft.com/alerts/${alert.alertId}<br>`;
