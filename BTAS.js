@@ -1567,16 +1567,14 @@ function WineventAlertHandler(...kwargs) {
         return alertInfo;
     }
     const alertInfo = parseLog(rawLog);
-
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const cachedMappingContent = GM_getValue('cachedMappingContent', null);
-
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
         if (LogSourceDomain == cachedMappingContent['gga']) {
             alertDescriptions.push(`Log Details:\n`);
         }
@@ -1738,13 +1736,14 @@ function FortigateAlertHandler(...kwargs) {
         extract_alert_infos = ExtractAlertInfo(alertInfos);
     }
 
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of extract_alert_infos) {
             let desc = `Observed ${summary}\n`;
             Object.entries(info).forEach(([index, value]) => {
@@ -1829,14 +1828,14 @@ function CSAlertHandler(...kwargs) {
     }
 
     const alertInfo = parseCefLog(rawLog);
-
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             const { Summary } = info;
             let desc = `Observed ${Summary}\n`;
@@ -1899,14 +1898,14 @@ function SophosAlertHandler(...kwargs) {
         return alertInfo;
     }
     const alertInfo = parseLog(rawLog);
-
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             let desc = `Observed ${info.summary}\nHost: ${info.alertHost} IP: ${info.alertIP || 'N/A'}\nUser: ${
                 info.alertUser
@@ -2148,13 +2147,14 @@ function AwsAlertHandler(...kwargs) {
 
     const alertInfo = parseLog(rawLog);
     const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             let desc = `Observed ${summary.split(']')[1]}\n`;
             Object.entries(info).forEach(([index, value]) => {
@@ -2350,14 +2350,14 @@ Vulnerability Information:</br>
     }
 
     const alertInfo = parseLog(rawLog);
-
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             let arr = summary.split(']');
             let desc = `Observed ${arr[arr.length - 1]}\n`;
@@ -2549,13 +2549,14 @@ function AzureGraphAlertHandler(...kwargs) {
 
     const alertInfo = parseLog(rawLog);
     const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         if (summary.toLowerCase().includes('conditional access policy updated')) {
             for (const info of alertInfo) {
                 console.log(info['alertExtraInfo']['userPrincipalName']);
@@ -2707,13 +2708,14 @@ function ProofpointAlertHandler(...kwargs) {
     const alertInfo = parseLog(rawLog);
     const num_alert = $('#customfield_10300-val').text().trim();
     console.log('reduce the methods iterated altogether' + num_alert + ' times');
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             let desc = `Observed ${summary.split(']')[1]}\n`;
             for (const key in info.alertExtraInfo) {
@@ -2773,13 +2775,14 @@ function ZscalerAlertHandler(...kwargs) {
 
     const alertInfo = parseLog(rawLog);
     const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             let desc = `Observed ${summary.split(']')[1]}\n`;
             for (const key in info.alertExtraInfo) {
@@ -2841,13 +2844,14 @@ function PulseAlertHandler(...kwargs) {
     }
     const alertInfo = parseLog(rawLog);
     const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         let desc = `Observed ${summary.split(']')[1]}\n`;
         desc += alertInfo;
         desc += `\n\nPlease verify if the login is legitimate.\n`;
@@ -3435,13 +3439,14 @@ function DarktraceAlertHandler(...kwargs) {
     }
     const alertInfo = parseLog(rawLog);
     const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             const lastindex = summary.lastIndexOf(']');
             let ss = summary.substr(lastindex + 1).split('::');
@@ -3814,13 +3819,14 @@ function CarbonAlertHandler(...kwargs) {
         return alertInfo;
     }
     const alertInfo = parseLog(rawLog);
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             const lastindex = summary.lastIndexOf(']');
             let desc = `Observed ${summary.substr(lastindex + 1)}\n`;
@@ -4491,13 +4497,14 @@ function ClarotyAlertHandler(...kwargs) {
         return alertInfo;
     }
     const alertInfo = parseLog(rawLog);
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             const lastindex = summary.lastIndexOf(']');
             let desc = `Observed ${summary.substr(lastindex + 1)}\n`;
@@ -4567,13 +4574,14 @@ function FireeyeAlertHandler(...kwargs) {
         return alertInfo;
     }
     const alertInfo = parseLog(rawLog);
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             const lastindex = summary.lastIndexOf(']');
             let desc = `Observed ${summary.substr(lastindex + 1)}\n`;
@@ -4781,13 +4789,14 @@ function FireeyeEtpAlertHandler(...kwargs) {
 
     const alertInfo = parseLog(rawLog);
     const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             let desc = `Observed ${summary.split(']')[1]}\n`;
             Object.entries(info).forEach(([index, value]) => {
@@ -4841,13 +4850,14 @@ function SentinelOneAlertHandler(...kwargs) {
 
     const alertInfo = parseLog(rawLog);
     const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             let desc = `Observed ${summary.split(']')[1]}\n`;
             Object.entries(info).forEach(([index, value]) => {
@@ -4913,13 +4923,14 @@ function JsonAlertHandler(...kwargs) {
 
     const alertInfo = parseLog(rawLog);
     const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             let desc = `Observed ${summary.split(']').at(-1)}\n`;
             Object.entries(info).forEach(([index, value]) => {
@@ -4981,13 +4992,14 @@ function F5AsmAlertHandler(...kwargs) {
 
     const alertInfo = parseLog(rawLog);
     const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
         const alertDescriptions = [];
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
+
         for (const info of alertInfo) {
             let desc = `Observed ${summary.split(']').at(-1)}\n`;
             Object.entries(info).forEach(([index, value]) => {
