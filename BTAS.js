@@ -4295,12 +4295,12 @@ function MDE365AlertHandler(...kwargs) {
             alertDescriptions.push(desc);
         }
     }
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
     function generateDescription() {
-        if (raw_alert < num_alert) {
-            AJS.banner({
-                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-            });
-        }
         generateDescription_MDE();
         generateDescription_365();
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
