@@ -685,6 +685,49 @@ function checkupdate(NotifyControls) {
     }
 }
 
+function fetchData(url, apiKey) {
+    GM_xmlhttpRequest({
+        method: 'GET',
+        url: url,
+        headers: {
+            'api-key': apiKey
+        },
+        timeout: 4000, // 超过4秒未获取到文件则使用缓存文件
+        onload: function (response) {
+            if (response.status === 200) {
+                const data = JSON.parse(response.responseText)['data'];
+                console.log(data);
+                let cachedEntry = {};
+                data['website'].forEach((item, index) => {
+                    if (item && item['name'] == 'hk' && item['url']) {
+                        cachedEntry['hk'] = item['url'];
+                    }
+                    if (item && item['name'] == 'macao' && item['url']) {
+                        cachedEntry['macao'] = item['url'];
+                    }
+                    GM_setValue('cachedEntry', cachedEntry);
+                });
+                GM_setValue('cachedMappingContent', data['mapping']);
+                GM_setValue('cachedKeywordsContent', data['keywords']);
+                GM_setValue('cachedWebsiteContent', data['website']);
+                GM_setValue('cachedWhitehashContent', data['whitehash']);
+                GM_setValue('cachedLogsourcedomainOorg', data['logsourcedomain2org']);
+                console.log('===', data['logsourcedomain2org']);
+            } else {
+                console.error('Error fetching cachedContent:', response.status);
+            }
+        },
+        ontimeout: function () {
+            if (cachedKeywordsContent == null || cachedWebsiteContent == null || cachedWhitehashContent == null) {
+                showFlag('Error', 'BTAS缓存数据获取失败', '未连接到 VPN，请连接后刷新页面', 'auto');
+            }
+        },
+        onerror: function (error) {
+            console.error('Error:', error);
+        }
+    });
+}
+
 /**
  * This function checks for specific keywords within a string
  * Advises the user to double-check and contact L2 or TL if suspicious.
@@ -708,53 +751,7 @@ function checkKeywords() {
             }
         }
     }
-    function fetchData(url, apiKey) {
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: url,
-            headers: {
-                'api-key': apiKey
-            },
-            timeout: 4000, // 超过4秒未获取到文件则使用缓存文件
-            onload: function (response) {
-                if (response.status === 200) {
-                    const data = JSON.parse(response.responseText)['data'];
-                    console.log(data);
-                    let cachedEntry = {};
-                    data['website'].forEach((item, index) => {
-                        if (item && item['name'] == 'hk' && item['url']) {
-                            cachedEntry['hk'] = item['url'];
-                        }
-                        if (item && item['name'] == 'macao' && item['url']) {
-                            cachedEntry['macao'] = item['url'];
-                        }
-                        GM_setValue('cachedEntry', cachedEntry);
-                    });
-                    GM_setValue('cachedMappingContent', data['mapping']);
-                    GM_setValue('cachedKeywordsContent', data['keywords']);
-                    GM_setValue('cachedWebsiteContent', data['website']);
-                    GM_setValue('cachedWhitehashContent', data['whitehash']);
-                } else {
-                    console.error('Error fetching cachedContent:', response.status);
-                }
-            },
-            ontimeout: function () {
-                if (cachedKeywordsContent == null || cachedWebsiteContent == null || cachedWhitehashContent == null) {
-                    showFlag('Error', 'BTAS缓存数据获取失败', '未连接到 VPN，请连接后刷新页面', 'auto');
-                }
-            },
-            onerror: function (error) {
-                console.error('Error:', error);
-            }
-        });
-    }
-
-    const url = 'https://172.18.4.200/api/7vVKD9hF/message/';
-    const apiKey = 'Tnznjha3yhJgA7YG';
     const cachedKeywordsContent = GM_getValue('cachedKeywordsContent', null);
-    if (cachedKeywordsContent == null) {
-        fetchData(url, apiKey);
-    }
     check(cachedKeywordsContent);
 }
 
@@ -5190,6 +5187,53 @@ function MonitorDev() {
     }
 }
 
+function MonitorOrgEscalate() {
+    var LogSourceDomain = $('#customfield_10223-val').text().trim().toLowerCase();
+    let cachedLogsourcedomainOorg = GM_getValue('cachedLogsourcedomainOorg', null);
+
+    function bindEditIssueButton() {
+        var btn = document.getElementById('edit-issue-submit');
+        if (btn && !btn.dataset.bound) {
+            var org = document.getElementById('customfield_10002-multi-select');
+            let get_pass = true;
+            for (const c of cachedLogsourcedomainOorg) {
+                if (c['logsourcedomain'].toLowerCase() == LogSourceDomain && org) {
+                    var items = org.querySelectorAll('.sd-participant-lozenge');
+                    items.forEach(function (item) {
+                        console.log(
+                            '找到的 title:',
+                            item.getAttribute('title').toLocaleLowerCase(),
+                            c['org'].toLowerCase()
+                        );
+                        if (c['org'].toLowerCase().includes(item.getAttribute('title').toLocaleLowerCase())) {
+                            console.log(
+                                '===命中了',
+                                item.getAttribute('title').toLocaleLowerCase(),
+                                c['org'].toLowerCase()
+                            );
+                        } else {
+                            get_pass = false;
+                        }
+                    });
+                }
+            }
+            btn.dataset.bound = 'true'; // 添加标记，避免重复绑定事件
+            btn.addEventListener('click', function (event) {
+                if (!get_pass) {
+                    var confirmed = confirm('确定要提交吗？,填写的ORG可能不正确');
+                    if (!confirmed) {
+                        event.preventDefault(); // 阻止默认行为
+                        console.log('用户取消操作');
+                    }
+                }
+            });
+        }
+    }
+    setInterval(function () {
+        bindEditIssueButton(); // 每秒检查一次元素是否未绑定
+    }, 1000);
+}
+
 function WhiteFilehash(filehash) {
     if (filehash == undefined) {
         return 0;
@@ -5204,6 +5248,12 @@ function WhiteFilehash(filehash) {
 }
 
 function RealTimeMonitoring() {
+    const url = 'https://172.18.4.200/api/7vVKD9hF/message/';
+    const apiKey = 'Tnznjha3yhJgA7YG';
+    const cachedKeywordsContent = GM_getValue('cachedKeywordsContent', null);
+    if (cachedKeywordsContent == null) {
+        fetchData(url, apiKey);
+    }
     // Filter page: audio control registration and regular issues table update
     if (
         (window.location.href.includes('filter=15200') ||
@@ -5523,4 +5573,5 @@ function RealTimeMonitoring() {
     registerCustomQuickReplyMenu();
     addCss();
     MonitorDev();
+    MonitorOrgEscalate();
 })();
