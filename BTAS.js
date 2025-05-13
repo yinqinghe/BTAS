@@ -2,7 +2,7 @@
 // @name         BTAS
 // @namespace    https://github.com/yinqinghe/BTAS
 // @homepageURL  https://github.com/yinqinghe/BTAS
-// @version      4.1.9
+// @version      4.2.0
 // @description  Blue Team Auxiliary Script
 // @author       Barry, Jack, Xingyu, Mike
 // @license      Apache-2.0
