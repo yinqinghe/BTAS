@@ -5326,7 +5326,8 @@ function RealTimeMonitoring() {
                 'login success from malware ip(s)': ThreatMatrixAlertHandler,
                 'multiple account being disabled or deleted in short period of time': MultipleAccountAlertHandler,
                 'multiple sms request for same source ip': AwsAlertHandler,
-                'malicious email campaign detected (>20)': JsonAlertHandler
+                'malicious email campaign detected (>20)': JsonAlertHandler,
+                'azure same user login failed multiple times': Risky_Countries_AlertHandler
             };
             const Summary = $('#summary-val').text().trim();
             let No_Decoder_handler = null;
