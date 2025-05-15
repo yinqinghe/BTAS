@@ -2561,7 +2561,7 @@ function AzureGraphAlertHandler(...kwargs) {
                     info['alertExtraInfo']['userPrincipalName']
                 }" was on (<span class="red_highlight">GMT</span>)${
                     info['alertExtraInfo']['activityDateTime'].split('.')[0]
-                }ZS Updated the conditional access policy "${info['alertExtraInfo']['displayName']}"\n\n`;
+                }Z Updated the conditional access policy "${info['alertExtraInfo']['displayName']}"\n\n`;
                 for (const key in info.alertExtraInfo) {
                     if (Object.hasOwnProperty.call(info.alertExtraInfo, key)) {
                         const value = info.alertExtraInfo[key];
@@ -5191,40 +5191,48 @@ function MonitorOrgEscalate() {
     var LogSourceDomain = $('#customfield_10223-val').text().trim().toLowerCase();
     let cachedLogsourcedomainOorg = GM_getValue('cachedLogsourcedomainOorg', null);
 
-    function bindEditIssueButton() {
-        var btn = document.getElementById('edit-issue-submit');
-        if (btn && !btn.dataset.bound) {
-            var org = document.getElementById('customfield_10002-multi-select');
-            let get_pass = true;
-            for (const c of cachedLogsourcedomainOorg) {
-                if (c['logsourcedomain'].toLowerCase() == LogSourceDomain && org) {
-                    var items = org.querySelectorAll('.sd-participant-lozenge');
-                    items.forEach(function (item) {
+    function verify() {
+        let get_pass = true;
+        var org = document.getElementById('customfield_10002-multi-select');
+
+        for (const c of cachedLogsourcedomainOorg) {
+            if (c['logsourcedomain'].toLowerCase() == LogSourceDomain && org) {
+                var items = org.querySelectorAll('.sd-participant-lozenge');
+                items.forEach(function (item) {
+                    console.log(
+                        '找到的 title:',
+                        item.getAttribute('title').toLocaleLowerCase(),
+                        c['org'].toLowerCase()
+                    );
+                    if (c['org'].toLowerCase().includes(item.getAttribute('title').toLocaleLowerCase())) {
                         console.log(
-                            '找到的 title:',
+                            '===命中了',
                             item.getAttribute('title').toLocaleLowerCase(),
                             c['org'].toLowerCase()
                         );
-                        if (c['org'].toLowerCase().includes(item.getAttribute('title').toLocaleLowerCase())) {
-                            console.log(
-                                '===命中了',
-                                item.getAttribute('title').toLocaleLowerCase(),
-                                c['org'].toLowerCase()
-                            );
-                        } else {
-                            get_pass = false;
-                        }
-                    });
-                }
+                    } else {
+                        get_pass = false;
+                    }
+                });
             }
+        }
+        return get_pass;
+    }
+
+    function bindEditIssueButton() {
+        var btn = document.getElementById('edit-issue-submit');
+        if (btn && !btn.dataset.bound) {
             btn.dataset.bound = 'true'; // 添加标记，避免重复绑定事件
             btn.addEventListener('click', function (event) {
-                if (!get_pass) {
-                    var confirmed = confirm('确定要提交吗？,填写的ORG可能不正确');
-                    if (!confirmed) {
-                        event.preventDefault(); // 阻止默认行为
-                        console.log('用户取消操作');
-                    }
+                let get_pass = verify(cachedLogsourcedomainOorg);
+                console.log('===get_pass', get_pass);
+                if (get_pass) {
+                    console.log('===binggo');
+                    // alert('ORG填写正确');
+                    // event.preventDefault(); // 阻止默认行为
+                } else {
+                    alert('ORG填写错误');
+                    event.preventDefault(); // 阻止默认行为
                 }
             });
         }
