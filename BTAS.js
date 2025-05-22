@@ -2008,44 +2008,41 @@ function AwsAlertHandler(...kwargs) {
                 if (DecoderName == 'aws-guardduty') {
                     let EventTime = aws.service.eventFirstSeen.split('.')[0] + 'Z';
                     const action = aws.service.action;
+                    let alert = {};
+                    alert['EventTime'] = EventTime;
+                    alert['title'] = aws.title;
+                    if (aws.resource.instanceDetails) {
+                        alert['instanceId'] = aws.resource.instanceDetails.instanceId;
+                        alert['instanceType'] = aws.resource.instanceDetails.instanceType;
+                        alert['instanceState'] = aws.resource.instanceDetails.instanceState;
+                    }
                     if (action && action.actionType == 'AWS_API_CALL') {
-                        acc.push({
-                            EventTime: EventTime,
-                            actionType: action.actionType,
-                            Api_Name: action?.awsApiCallAction?.api,
-                            userName: aws?.resource?.accessKeyDetails?.userName,
-                            RemoteIP: action?.awsApiCallAction?.remoteIpDetails?.ipAddressV4,
-                            RemoteIP_country: action?.awsApiCallAction?.remoteIpDetails?.country.countryName
-                        });
+                        alert['actionType'] = action.actionType;
+                        alert['Api_Name'] = action?.awsApiCallAction?.api;
+                        alert['userName'] = aws?.resource?.accessKeyDetails?.userName;
+                        alert['RemoteIP'] = action?.awsApiCallAction?.remoteIpDetails?.ipAddressV4;
+                        alert['RemoteIP_country'] = action?.awsApiCallAction?.remoteIpDetails?.country.countryName;
                     } else if (action && action.actionType == 'KUBERNETES_API_CALL') {
-                        acc.push({
-                            EventTime: EventTime,
-                            actionType: action.actionType,
-                            userName: aws?.resource?.accessKeyDetails?.userName,
-                            sourceIPs: action?.kubernetesApiCallAction?.sourceIPs,
-                            requestUri: action?.kubernetesApiCallAction?.requestUri
-                        });
+                        alert['actionType'] = action.actionType;
+                        alert['userName'] = aws?.resource?.accessKeyDetails?.userName;
+                        alert['sourceIPs'] = action?.kubernetesApiCallAction?.sourceIPs;
+                        alert['requestUri'] = action?.kubernetesApiCallAction?.requestUri;
                     } else if (action && action.actionType == 'PORT_PROBE') {
-                        acc.push({
-                            EventTime: EventTime,
-                            actionType: action.actionType,
-                            localPort: action?.portProbeAction?.portProbeDetails.localPortDetails.port,
-                            RemoteIP: action?.portProbeAction?.portProbeDetails.remoteIpDetails.ipAddressV4,
-                            RemoteIP_country:
-                                action?.portProbeAction?.portProbeDetails.remoteIpDetails.country.countryName
-                        });
+                        alert['actionType'] = action.actionType;
+                        alert['localPort'] = action?.portProbeAction?.portProbeDetails.localPortDetails.port;
+                        alert['RemoteIP'] = action?.portProbeAction?.portProbeDetails.remoteIpDetails.ipAddressV4;
+                        alert['RemoteIP_country'] =
+                            action?.portProbeAction?.portProbeDetails.remoteIpDetails.country.countryName;
                     } else if (action && action.actionType == 'NETWORK_CONNECTION') {
-                        acc.push({
-                            EventTime: EventTime,
-                            actionType: action.actionType,
-                            localIp: action?.networkConnectionAction?.localIpDetails.ipAddressV4,
-                            localPortDetails: action?.networkConnectionAction?.localPortDetails.port,
-                            remoteIp: action?.networkConnectionAction?.remoteIpDetails.ipAddressV4,
-                            remotePortDetails: action?.networkConnectionAction?.remotePortDetails.port,
-                            instanceId: aws?.resource?.instanceDetails?.instanceId,
-                            platform: aws?.resource?.instanceDetails?.platform,
-                            remoteIpcountryName: action?.networkConnectionAction?.remoteIpDetails?.country?.countryName
-                        });
+                        alert['actionType'] = action.actionType;
+                        alert['localIp'] = action?.networkConnectionAction?.localIpDetails.ipAddressV4;
+                        alert['localPortDetails'] = action?.networkConnectionAction?.localPortDetails.port;
+                        alert['remoteIp'] = action?.networkConnectionAction?.remoteIpDetails.ipAddressV4;
+                        alert['remotePortDetails'] = action?.networkConnectionAction?.remotePortDetails.port;
+                        alert['instanceId'] = aws?.resource?.instanceDetails?.instanceId;
+                        alert['platform'] = aws?.resource?.instanceDetails?.platform;
+                        alert['remoteIpcountryName'] =
+                            action?.networkConnectionAction?.remoteIpDetails?.country?.countryName;
                     } else if (aws.service.featureName == 'RuntimeMonitoring') {
                         console.log('===', aws.service);
                         let process = aws.service.runtimeDetails.process;
@@ -2075,17 +2072,16 @@ function AwsAlertHandler(...kwargs) {
                                 userid: lineage['userId']
                             });
                         }
-                        acc.push({
-                            EventTime: EventTime,
-                            accountId: aws?.accountId,
-                            resourceType: aws?.resource?.resourceType,
-                            instanceId: aws?.resource?.instanceDetails?.instanceId,
-                            instanceType: aws?.resource?.instanceDetails?.instanceType,
-                            user: process.user,
-                            pwd: process.pwd,
-                            lineage: data['lineage']
-                        });
+                        alert['accountId'] = aws?.accountId;
+                        alert['resourceType'] = aws?.resource?.resourceType;
+                        alert['instanceId'] = aws?.resource?.instanceDetails?.instanceId;
+                        alert['instanceType'] = aws?.resource?.instanceDetails?.instanceType;
+                        alert['user'] = process.user;
+                        alert['pwd'] = process.pwd;
+                        alert['lineage'] = data['lineage'];
                     }
+                    alert['Description'] = aws.description;
+                    acc.push(alert);
                 } else if (summary.toLowerCase().includes('multiple sms request for same source ip')) {
                     let headers = aws.logEvents.message.httpRequest.headers;
                     let host, content;
@@ -2153,7 +2149,12 @@ function AwsAlertHandler(...kwargs) {
         const alertDescriptions = [];
 
         for (const info of alertInfo) {
-            let desc = `Observed ${summary.split(']')[1]}\n`;
+            let desc = '';
+            if (DecoderName == 'aws-guardduty') {
+                desc = `Observed ${info.title}\n`;
+            } else {
+                desc = `Observed ${summary.split(']')[1]}\n`;
+            }
             Object.entries(info).forEach(([index, value]) => {
                 if (Array.isArray(info[index])) {
                     info[index].forEach((item) => {
@@ -2164,7 +2165,7 @@ function AwsAlertHandler(...kwargs) {
                             }
                         }
                     });
-                } else if (value !== undefined && value !== ' ' && index != 'Summary') {
+                } else if (value !== undefined && value !== ' ' && index != 'Summary' && index != 'title') {
                     if (index == 'EventTime') {
                         desc += `EventTime(<span class="red_highlight">GMT</span>): ${value}\n`;
                     } else {
