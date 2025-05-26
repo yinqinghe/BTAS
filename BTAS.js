@@ -1264,7 +1264,7 @@ function cortexAlertHandler(...kwargs) {
                     comment = '\nPlease verify if the File is legitimate.   IF NOT, please Remove the File.\n';
                 }
                 let desc = `Observed ${
-                    description || name
+                    name || description
                 }\ntimestamp: ${dateTimeStr} \n<span class="red_highlight">action_external_hostname: ${action_external_hostname}\n</span>action: ${action_pretty}\n`;
                 for (const key of unPanNgfw) {
                     console.log(key);
@@ -2468,7 +2468,7 @@ function ImpervaincCEFAlertHandler(...kwargs) {
 function AzureGraphAlertHandler(...kwargs) {
     const { summary, rawLog } = kwargs[0];
     var raw_alert = 0;
-    if (summary.toLowerCase().includes('successful azure/o365 login from malware-ip')) {
+    if (summary.toLowerCase().includes('o365 login from malware-ip')) {
         return;
     }
     function parseLog(rawLog) {
@@ -2880,15 +2880,15 @@ function Risky_Countries_AlertHandler(...kwargs) {
                     const { displayName, operatingSystem } = deviceDetail;
 
                     const alertExtraInfo = {
-                        createdEventDateTime: createdDateTime ? createdDateTime : undefined,
+                        CreationEventTime: createdDateTime ? createdDateTime : undefined,
                         userDisplayName: userDisplayName ? userDisplayName : undefined,
                         userPrincipalName: userPrincipalName ? userPrincipalName : undefined,
                         appDisplayName: appDisplayName ? appDisplayName : undefined,
                         ipAddress: ipAddress ? ipAddress : undefined,
                         operatingSystem: operatingSystem ? operatingSystem : undefined,
                         DeviceName: displayName ? displayName : 'N/A',
-                        failureReason: failureReason ? failureReason : undefined,
-                        additionalDetails: additionalDetails ? additionalDetails : undefined
+                        additionalDetails: additionalDetails ? additionalDetails : undefined,
+                        failureReason: failureReason ? failureReason : undefined
                     };
                     acc.push({ alertExtraInfo });
                 }
@@ -2957,17 +2957,17 @@ function Risky_Countries_AlertHandler(...kwargs) {
         return alertInfo;
     }
     const alertInfo = parseLog(rawLog);
+
     function generateDescription() {
         const alertDescriptions = [];
-        console.log(alertInfo);
         for (const info of alertInfo) {
             const lastindex = summary.lastIndexOf(']');
-
+            console.log('===info', info);
             let desc = `Observed ${summary.substr(lastindex + 1)}\n`;
             for (const key in info.alertExtraInfo) {
                 if (Object.hasOwnProperty.call(info.alertExtraInfo, key)) {
                     const value = info.alertExtraInfo[key];
-                    if (value !== undefined) {
+                    if (value !== undefined && value !== 'N/A') {
                         if (key == 'CreationEventTime') {
                             desc += `CreationEventTime(<span class="red_highlight">GMT</span>): ${value}\n`;
                         } else {
@@ -4101,9 +4101,11 @@ function MDE365AlertHandler(...kwargs) {
                         let creationTime = GMT8(logObj['mde']['alertCreationTime'].split('.')[0]);
                         alertInfo_MDE.push({
                             creationTime: creationTime,
+                            computerDnsName: logObj['mde'].computerDnsName,
                             summary: logObj['mde'].title,
                             alerts: alerts,
-                            id: logObj['mde'].id
+                            id: logObj['mde'].id,
+                            description: logObj['mde'].description
                         });
                     } else {
                         raw_alert += 1;
