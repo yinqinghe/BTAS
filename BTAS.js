@@ -421,7 +421,8 @@ function QuickReply() {
         'Waiting ticket': 'Dear Customer,<br>Thanks, we look forward to hearing from you.',
         'Waiting Full Scan':
             'Dear Customer,<br>Full scan have been triggered , if suspicious files detected new MDE alert/ticket will be created.',
-        'Ask for Whitelist': 'Dear Customer,<br>Can we add the ticket to white list?<br>Best Regards.',
+        'Ask for Whitelist':
+            'Dear Customer,<br>If the activity is legitimate. Can we add the ticket to white list?<br>Best Regards.',
         'Whitelist Done':
             'Dear Customer,<br>We have informed the relevant parties to add this ticket to the white list and will close this ticket<br>Best Regards.',
         'Haeco high severity':
@@ -2150,6 +2151,7 @@ function AwsAlertHandler(...kwargs) {
 
         for (const info of alertInfo) {
             let desc = '';
+            console.log('===info', info);
             if (DecoderName == 'aws-guardduty') {
                 desc = `Observed ${info.title}\n`;
             } else {
@@ -2157,14 +2159,16 @@ function AwsAlertHandler(...kwargs) {
             }
             Object.entries(info).forEach(([index, value]) => {
                 if (Array.isArray(info[index])) {
-                    info[index].forEach((item) => {
-                        desc += '\n';
-                        for (let subKey in item) {
-                            if (item.hasOwnProperty(subKey) && item[subKey] !== '') {
-                                desc += `${subKey}: ${item[subKey]}\n`;
-                            }
-                        }
-                    });
+                    desc += `${index}: ${info[index]}\n`;
+                    // info[index].forEach((item) => {
+                    //     desc += '\n';
+                    //     for (let subKey in item) {
+                    //         if (item.hasOwnProperty(subKey) && item[subKey] !== '') {
+                    //             console.log('===', subKey, item[subKey]);
+                    //             desc += `${subKey}: ${item[subKey]}\n`;
+                    //         }
+                    //     }
+                    // });
                 } else if (value !== undefined && value !== ' ' && index != 'Summary' && index != 'title') {
                     if (index == 'EventTime') {
                         desc += `EventTime(<span class="red_highlight">GMT</span>): ${value}\n`;
@@ -4094,6 +4098,9 @@ function MDE365AlertHandler(...kwargs) {
                         }
                         if (evidences.process) {
                             evidences.process = deduplicateObjects(evidences.process);
+                        }
+                        if (evidences.user) {
+                            evidences.user = deduplicateObjects(evidences.user);
                         }
                         Object.assign(alert_single, devices, evidences);
                         alert_single['description'] = alert['description'] || undefined;
