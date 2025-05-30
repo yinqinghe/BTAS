@@ -5325,7 +5325,7 @@ function MonitorOrgEscalate() {
                     // alert('ORG填写正确');
                     // event.preventDefault(); // 阻止默认行为
                 } else {
-                    alert('ORG填写错误');
+                    alert('ORG填写错误， 若检查后确认无误，需暂时关闭BTAS，并反馈给Mike/Barry');
                     event.preventDefault(); // 阻止默认行为
                 }
             });
