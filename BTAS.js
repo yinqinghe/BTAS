@@ -5111,6 +5111,67 @@ function F5AsmAlertHandler(...kwargs) {
     addButton('generateDescription', 'Description', generateDescription);
 }
 
+function CheckPointEmailHandler(...kwargs) {
+    const { rawLog, summary } = kwargs[0];
+    var raw_alert = 0;
+    function parseLog(rawLog) {
+        const alertInfo = rawLog.reduce((acc, log) => {
+            try {
+                if (log.length == 0) {
+                    return acc;
+                }
+                const jsonString = log.match(/{.*}/)[0];
+                let result = JSON.parse(jsonString);
+                fieldNames = ['app_id', 'id', 'confidence_level_int', 'tenant_id', 'rule_id'];
+                result['time'] = result['time'].split('.')[0];
+                fieldNames.forEach((field) => {
+                    if (result.hasOwnProperty(field)) {
+                        delete result[field];
+                    }
+                });
+                if (result.hasOwnProperty('email_message_id')) {
+                    console.log('===', result['email_message_id'].replace(/<>/g, ''));
+                }
+                console.log('===', result);
+                acc.push(result);
+                raw_alert += 1;
+            } catch (error) {
+                console.log(`Error: ${error}`);
+            }
+            return acc;
+        }, []);
+        return alertInfo;
+    }
+
+    const alertInfo = parseLog(rawLog);
+    const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
+    function generateDescription() {
+        const alertDescriptions = [];
+        for (const info of alertInfo) {
+            let desc = `Observed ${summary.split(']').at(-1)}\n`;
+            Object.entries(info).forEach(([index, value]) => {
+                if (value !== undefined && value !== ' ' && index != 'Summary') {
+                    if (index == 'time') {
+                        desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
+                    } else {
+                        desc += `${index}: ${value}\n`;
+                    }
+                }
+            });
+            desc += `\nPlease verify if the activity is legitimate.\n`;
+            alertDescriptions.push(desc);
+        }
+        const alertMsg = [...new Set(alertDescriptions)].join('\n');
+        showDialog(alertMsg);
+    }
+    addButton('generateDescription', 'Description', generateDescription);
+}
+
 function LLA_CS_AlertHandler(DecoderName) {
     let ORG = $('#customfield_10002-val').text().trim();
     console.log(ORG.split(' ')[ORG.split(' ').length - 1]);
@@ -5288,7 +5349,6 @@ function MonitorOrgEscalate() {
     function verify() {
         let get_pass = true;
         var org = document.getElementById('customfield_10002-multi-select');
-
         for (const c of cachedLogsourcedomainOorg) {
             if (c['logsourcedomain'].toLowerCase() == LogSourceDomain && org) {
                 var items = org.querySelectorAll('.sd-participant-lozenge');
@@ -5455,7 +5515,8 @@ function RealTimeMonitoring() {
                 'trellix_cef': SangforAlertHandler,
                 'json': JsonAlertHandler,
                 'f5-asm': F5AsmAlertHandler,
-                'sangfor': SangforAlertHandler
+                'sangfor': SangforAlertHandler,
+                'checkpoint-harmony-email-saas': CheckPointEmailHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
