@@ -5129,9 +5129,7 @@ function CheckPointEmailHandler(...kwargs) {
                         delete result[field];
                     }
                 });
-                if (result.hasOwnProperty('email_message_id')) {
-                    console.log('===', result['email_message_id'].replace(/<>/g, ''));
-                }
+
                 console.log('===', result);
                 acc.push(result);
                 raw_alert += 1;
@@ -5168,6 +5166,41 @@ function CheckPointEmailHandler(...kwargs) {
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
         showDialog(alertMsg);
+    }
+    addButton('generateDescription', 'Description', generateDescription);
+}
+
+function NoLogAlertHandler(...kwargs) {
+    const { summary } = kwargs[0];
+
+    function generateDescription() {
+        let alertDescriptions = '';
+        alertDescriptions += `Observed ${summary.split(']')[1]}\n`;
+        let log_source = $('#customfield_10204-val').text().trim();
+        if (log_source.includes('Hide')) {
+            console.log('===', log_source.split(' '));
+            let log_source_arr = [
+                ...new Set(
+                    log_source
+                        .split(' ')
+                        .map((item) => item.trim())
+                        .filter((item) => item !== '')
+                )
+            ];
+            console.log('===', log_source_arr[1].split('\n'));
+            log_source_arr[1].split('\n').forEach((item) => {
+                alertDescriptions += `\nLog Source: ${item}`;
+                alertDescriptions += `\nlast received time:\n`;
+            });
+        } else {
+            console.log('===', log_source);
+            alertDescriptions += `\nLog Source: ${log_source}`;
+            alertDescriptions += `\nlast received time:\n`;
+        }
+
+        alertDescriptions += `\nPlease verify if the activity is legitimate.\n`;
+
+        showDialog(alertDescriptions);
     }
     addButton('generateDescription', 'Description', generateDescription);
 }
@@ -5552,7 +5585,8 @@ function RealTimeMonitoring() {
                 'multiple account being disabled or deleted in short period of time': MultipleAccountAlertHandler,
                 'multiple sms request for same source ip': AwsAlertHandler,
                 'malicious email campaign detected (>20)': JsonAlertHandler,
-                'azure same user login failed multiple times': Risky_Countries_AlertHandler
+                'azure same user login failed multiple times': Risky_Countries_AlertHandler,
+                'no log received alert': NoLogAlertHandler
             };
             const Summary = $('#summary-val').text().trim();
             let No_Decoder_handler = null;
