@@ -1250,7 +1250,6 @@ function cortexAlertHandler(...kwargs) {
                 description = rule_description;
             }
             const cachedMappingContent = GM_getValue('cachedMappingContent', null);
-            console.log('===', cachedMappingContent);
             if (source === 'PAN NGFW') {
                 const desc = `Observed ${name}\ntimestamp: ${dateTimeStr}\nSrcip: ${action_local_ip}   Srcport: ${action_local_port}\nDstip: ${action_remote_ip}   Dstport: ${action_remote_port}\nAction: ${action_pretty}\n${
                     LogSourceDomain === cachedMappingContent['cca'] ? 'Cortex Portal: ' + alert_link + '\n' : ''
@@ -1266,7 +1265,10 @@ function cortexAlertHandler(...kwargs) {
                 }
                 let desc = `Observed ${
                     name || description
-                }\ntimestamp: ${dateTimeStr} \n<span class="red_highlight">action_external_hostname: ${action_external_hostname}\n</span>action: ${action_pretty}\n`;
+                }\ntimestamp: ${dateTimeStr}\n</span>action: ${action_pretty}\n`;
+                if (action_external_hostname) {
+                    desc += `\n<span class="red_highlight">action_external_hostname: ${action_external_hostname}`;
+                }
                 for (const key of unPanNgfw) {
                     console.log(key);
                     if (Object.hasOwnProperty.call(info, key)) {
@@ -1640,7 +1642,7 @@ function FortigateAlertHandler(...kwargs) {
     const alertInfos = ParseFortigateLog(rawLog);
     function ExtractAlertInfo(ExtractAlertInfo) {
         const extract_alert_infos = alertInfos.reduce((acc, alertInfo) => {
-            const {
+            let {
                 date,
                 time,
                 srcip,
@@ -1661,7 +1663,8 @@ function FortigateAlertHandler(...kwargs) {
                 analyticscksum,
                 from,
                 to,
-                remip
+                remip,
+                ref
             } = alertInfo;
             let arr = [];
             if (summary.toLowerCase().includes('infected file detected in fortigate')) {
@@ -1684,7 +1687,12 @@ function FortigateAlertHandler(...kwargs) {
                 let vt_url = 'https://www.virustotal.com/gui/ip-address/' + remip;
                 arr.push(`<a href="${vt_url}">${vt_url}</a>`);
             }
+            ref = ref || undefined;
 
+            if (ref) {
+                ref = ref.replace(/^hXXp\[:\]/i, 'http:');
+                ref = `<a href="${ref}">${ref}</a>`;
+            }
             const extract_alert_info = {
                 datetime: `${date} ${time}`,
                 srcip: srcip ? `${srcip}:${srcport}[${srccountry}]` : undefined,
@@ -1702,7 +1710,8 @@ function FortigateAlertHandler(...kwargs) {
                 from: from,
                 to,
                 remip: remip,
-                VT: arr.length > 0 ? arr : undefined
+                VT: arr.length > 0 ? arr : undefined,
+                ref: ref || undefined
             };
             acc.push(extract_alert_info);
             return acc;
