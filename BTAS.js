@@ -1752,16 +1752,36 @@ function FortigateAlertHandler(...kwargs) {
         const alertDescriptions = [];
 
         for (const info of extract_alert_infos) {
-            let desc = `Observed ${summary}\n`;
+            let desc = '';
+            if (LogSourceDomain == cachedMappingContent['kka']) {
+                desc = `观察到 ${summary}\n`;
+            } else {
+                desc = `Observed ${summary}\n`;
+            }
             Object.entries(info).forEach(([index, value]) => {
                 if (value !== undefined) {
                     desc += `${index}: ${value}\n`;
                 }
             });
-            let comment = '\nPlease help to verify if this activity is legitimate.\n';
-            if (summary.toLowerCase().includes('to malware ip(s)') || summary.toLowerCase().includes('to tor ip(s)')) {
-                comment = '\nPlease verify if the IP is legitimate.   If NOT, please block the dst ip\n';
+            let comment = '';
+            if (LogSourceDomain == cachedMappingContent['kka']) {
+                comment = '\n请帮助验证此活动是否合法。\n';
+                if (
+                    summary.toLowerCase().includes('to malware ip(s)') ||
+                    summary.toLowerCase().includes('to tor ip(s)')
+                ) {
+                    comment = '\n请验证该 IP 是否合法。如果不是，请屏蔽目标 IP\n';
+                }
+            } else {
+                comment = '\nPlease help to verify if this activity is legitimate.\n';
+                if (
+                    summary.toLowerCase().includes('to malware ip(s)') ||
+                    summary.toLowerCase().includes('to tor ip(s)')
+                ) {
+                    comment = '\nPlease verify if the IP is legitimate.   If NOT, please block the dst ip\n';
+                }
             }
+
             desc += comment;
             alertDescriptions.push(desc);
         }
@@ -3121,7 +3141,7 @@ function MdbAlertHandler(...kwargs) {
 }
 
 function AlicloudAlertHandler(...kwargs) {
-    var { summary, rawLog } = kwargs[0];
+    var { summary, rawLog, LogSourceDomain } = kwargs[0];
     var raw_alert = 0;
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
@@ -3191,11 +3211,17 @@ function AlicloudAlertHandler(...kwargs) {
     }
 
     const alertInfo = parseLog(rawLog);
+    const cachedMappingContent = GM_getValue('cachedMappingContent', null);
     function generateDescription() {
         const alertDescriptions = [];
         for (const info of alertInfo) {
             const lastindex = summary.lastIndexOf(']');
-            let desc = `Observed ${summary.substr(lastindex + 1)}\n`;
+            let desc = ``;
+            if (LogSourceDomain == cachedMappingContent['kka']) {
+                desc = `观察到 ${summary.substr(lastindex + 1)}\n`;
+            } else {
+                desc = `Observed ${summary.substr(lastindex + 1)}\n`;
+            }
             for (const key in info.alertExtraInfo) {
                 if (Object.hasOwnProperty.call(info.alertExtraInfo, key)) {
                     const value = info.alertExtraInfo[key];
@@ -3204,7 +3230,11 @@ function AlicloudAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease verify if the activity is legitimate.\n`;
+            if (LogSourceDomain == cachedMappingContent['kka']) {
+                desc += `\n请验证该活动是否合法。\n`;
+            } else {
+                desc += `\nPlease verify if the activity is legitimate.\n`;
+            }
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -4295,11 +4325,17 @@ function MDE365AlertHandler(...kwargs) {
     }
     const alertDescriptions = [];
     parseLog(rawLog);
+    const cachedMappingContent = GM_getValue('cachedMappingContent', null);
 
     function generateDescription_MDE() {
         console.log('===alertInfo_MDE', alertInfo_MDE);
         for (const info of alertInfo_MDE) {
-            let desc = `Observed ${info.summary}\n`;
+            let desc = '';
+            if (LogSourceDomain == cachedMappingContent['kka']) {
+                desc = `观察到 ${info.summary}\n`;
+            } else {
+                desc = `Observed ${info.summary}\n`;
+            }
             for (let key in info) {
                 if (Array.isArray(info[key])) {
                     info[key].forEach((item) => {
@@ -4336,13 +4372,24 @@ function MDE365AlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease help to verify if it is legitimate.\n`;
+            if (LogSourceDomain == cachedMappingContent['kka']) {
+                desc += `\n请验证该活动是否合法。\n`;
+            } else {
+                desc += `\nPlease verify if the activity is legitimate.\n`;
+            }
             alertDescriptions.push(desc);
         }
     }
     function generateDescription_365() {
         for (const info of alertInfo_365) {
-            let desc = `Observed ${info.summary}\n`;
+            let desc = '';
+            console.log('===???', cachedMappingContent);
+
+            if (LogSourceDomain == cachedMappingContent['kka']) {
+                desc = `观察到 ${info.summary}\n`;
+            } else {
+                desc = `Observed ${info.summary}\n`;
+            }
             try {
                 for (let key in info) {
                     if (Array.isArray(info[key])) {
@@ -4384,7 +4431,6 @@ function MDE365AlertHandler(...kwargs) {
                 console.error(`Error: ${error}`);
             }
             let MDEURL = '';
-            const cachedMappingContent = GM_getValue('cachedMappingContent', null);
 
             if (LogSourceDomain == cachedMappingContent['wwa']) {
                 if (info.alertid && !MDEURL.includes(info.alertid)) {
@@ -4396,8 +4442,11 @@ function MDE365AlertHandler(...kwargs) {
                 }
                 desc += `MDE URL: \n${MDEURL}\n`;
             }
-
-            desc += `\nPlease verify if the activity is legitimate.\n`;
+            if (LogSourceDomain == cachedMappingContent['kka']) {
+                desc += `\n请验证该活动是否合法。\n`;
+            } else {
+                desc += `\nPlease verify if the activity is legitimate.\n`;
+            }
             alertDescriptions.push(desc);
         }
     }
@@ -4406,6 +4455,7 @@ function MDE365AlertHandler(...kwargs) {
             body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
         });
     }
+
     function generateDescription() {
         generateDescription_MDE();
         generateDescription_365();
