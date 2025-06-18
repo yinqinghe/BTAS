@@ -4147,7 +4147,7 @@ function MDE365AlertHandler(...kwargs) {
                         let creationTime = GMT8(logObj['mde']['alertCreationTime'].split('.')[0]);
                         alertInfo_MDE.push({
                             creationTime: creationTime,
-                            computerDnsName: logObj['mde'].computerDnsName,
+                            Host: logObj['mde'].computerDnsName,
                             summary: logObj['mde'].title,
                             alerts: alerts,
                             id: logObj['mde'].id,
@@ -4324,6 +4324,7 @@ function MDE365AlertHandler(...kwargs) {
         return alertInfo;
     }
     const alertDescriptions = [];
+    let entities = [];
     parseLog(rawLog);
     const cachedMappingContent = GM_getValue('cachedMappingContent', null);
 
@@ -4347,6 +4348,9 @@ function MDE365AlertHandler(...kwargs) {
                                     for (let subkey in i) {
                                         if (i[subkey] !== '' && i[subkey] !== undefined) {
                                             desc += `${subkey}: ${i[subkey]}\n`;
+                                            if (subKey == 'user' || subKey == 'userSid') {
+                                                entities.push(`${subKey}: ${i[subKey]}`);
+                                            }
                                         }
                                     }
                                 });
@@ -4368,6 +4372,9 @@ function MDE365AlertHandler(...kwargs) {
                             desc += `creationTime(<span class="red_highlight">GMT+8</span>): ${info[key]}\n`;
                         } else {
                             desc += `${key}: ${info[key]}\n`;
+                            if (key == 'Host') {
+                                entities.push(`${key}: ${info[key]}`);
+                            }
                         }
                     }
                 }
@@ -4383,8 +4390,6 @@ function MDE365AlertHandler(...kwargs) {
     function generateDescription_365() {
         for (const info of alertInfo_365) {
             let desc = '';
-            console.log('===???', cachedMappingContent);
-
             if (LogSourceDomain == cachedMappingContent['kka']) {
                 desc = `观察到 ${info.summary}\n`;
             } else {
@@ -4403,11 +4408,17 @@ function MDE365AlertHandler(...kwargs) {
                                         for (let subKey in i) {
                                             if (i[subKey] !== '' && i[subKey] !== undefined) {
                                                 desc += `${subKey}: ${i[subKey]}\n`;
+                                                if (subKey == 'user' || subKey == 'userSid') {
+                                                    entities.push(`${subKey}: ${i[subKey]}`);
+                                                }
                                             }
                                         }
                                     });
                                 } else if (item[subKey] !== '' && item[subKey] !== undefined && subKey !== 'alertId') {
                                     desc += `${subKey}: ${item[subKey]}\n`;
+                                    if (subKey == 'Host') {
+                                        entities.push(`${subKey}: ${item[subKey]}`);
+                                    }
                                 }
                             }
                         });
@@ -4447,6 +4458,7 @@ function MDE365AlertHandler(...kwargs) {
             } else {
                 desc += `\nPlease verify if the activity is legitimate.\n`;
             }
+
             alertDescriptions.push(desc);
         }
     }
@@ -4459,7 +4471,29 @@ function MDE365AlertHandler(...kwargs) {
     function generateDescription() {
         generateDescription_MDE();
         generateDescription_365();
-        const alertMsg = [...new Set(alertDescriptions)].join('\n');
+        let alertMsg = [...new Set(alertDescriptions)].join('\n');
+        if (
+            LogSourceDomain == cachedMappingContent['ffa'] ||
+            LogSourceDomain == cachedMappingContent['cta'] ||
+            LogSourceDomain == cachedMappingContent['tta']
+        ) {
+            let extra = '|Item|Finding|';
+            if (LogSourceDomain == cachedMappingContent['ffa']) {
+                extra = 'Remediation Advise:建议\n|Item|Finding|\n|Type| |\n|Severity| |';
+            }
+
+            alertMsg = `${extra}
+|Remediation Advise| |
+|Suspicious Findings| |
+|Affected entities|${[...new Set(entities)].join('\n')}|
+|Supporting information|${alertMsg
+                .split('\n')
+                .filter((line) => line.trim() !== '')
+                .join('\n')
+                .replace(/\|/g, '\\|')}|
+|Correlation Ticket|${window.location.href.match(/MSS-\d+/)[0]}|
+|Other| | `;
+        }
         showDialog(alertMsg);
     }
     function openMDE() {
