@@ -867,6 +867,7 @@ function ticketNotify(pageData) {
             const condition = (property) => {
                 const propertyArray = property.propertiesVal.split(',');
                 let isAllConditionsMet = false;
+                let andCondition = true;
                 for (const val of propertyArray) {
                     try {
                         if (!property.conditionOptions) {
@@ -883,6 +884,7 @@ function ticketNotify(pageData) {
                                 isAllConditionsMet = true; // 如果任何一个属性满足条件，返回 true
                             }
                         }
+
                         switch (property.conditionOptions) {
                             case 'contain':
                                 if (pageData[property.propertiesKey].toLowerCase().includes(val.trim().toLowerCase())) {
@@ -897,7 +899,10 @@ function ticketNotify(pageData) {
                                     !pageData[property.propertiesKey].toLowerCase().includes(val.trim().toLowerCase())
                                 ) {
                                     isAllConditionsMet = true;
+                                } else {
+                                    andCondition = false;
                                 }
+
                                 break;
                             case 'equal':
                                 if (pageData[property.propertiesKey].toLowerCase() === val.trim().toLowerCase()) {
@@ -921,7 +926,7 @@ function ticketNotify(pageData) {
                         }
                     }
                 }
-                return isAllConditionsMet; // 如果所有属性都不满足条件，则返回 false
+                return isAllConditionsMet && andCondition; // 如果所有属性都不满足条件，则返回 false
             };
             properties = JSON.parse(properties);
             return properties.reduce((acc, property) => {
