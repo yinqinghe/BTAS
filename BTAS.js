@@ -5339,7 +5339,7 @@ function GGA_AlertHandler() {
         var description = $('#description-val').text().trim();
 
         if (!description.includes('details')) {
-            let kibana = $('#field-customfield_10308').text().trim().split(' ')[36];
+            let kibana = $('#field-customfield_10308 .flooded').text().trim().split('\n')[0];
             let newUrl = kibana.replace(
                 /https:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/,
                 'https://' + cachedMappingContent['gga_url']
