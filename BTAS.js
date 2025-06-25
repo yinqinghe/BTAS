@@ -1020,8 +1020,8 @@ function monitorList() {
  */
 function cortexAlertHandler(...kwargs) {
     console.log('#### Code cortexAlertHandler run ####');
-    const { LogSourceDomain, summary } = kwargs[0];
-    const rawLog = $('#field-customfield_10232 > div.twixi-wrap.verbose > div > div > div > pre').text();
+    const { LogSourceDomain, summary, rawLog } = kwargs[0];
+    const rawLog_debug = $('#field-customfield_10232 > div.twixi-wrap.verbose > div > div > div > pre').text();
     /**
      * Extracts the log information and organization name from the current JIRA issue page
      * @param {Object} orgDict - A dictionary that maps organization name to navigator name
@@ -1039,184 +1039,207 @@ function cortexAlertHandler(...kwargs) {
         alert('cachedWebsiteContent is empty,please connect VPN get information');
     }
     const orgNavigator = orgDict[LogSourceDomain];
+    let cortex_url = [];
 
     /**
      * Parse the relevant information from the raw log data
      * @param {Array} rawLog - An array of JSON strings representing the raw log data
      * @returns {Array} An array of objects containing the alert relevant information
      */
-    function parseLog(rawLog) {
+    function parseLog(cortex_log) {
         let alertInfo = [];
-        try {
-            const { timestamp, data, rule } = JSON.parse(rawLog);
-            let rule_description = rule['description'].split(':')[-1];
-            const { cortex_xdr } = data;
-            const { source, alert_id, name, description } = cortex_xdr;
-            const isPANNGFW = source === 'PAN NGFW';
-            let dotIndex = timestamp.lastIndexOf('.');
+        let cortex_xdr;
+        if (rawLog[0] != '') {
+            rawLog.reduce((acc, log) => {
+                if (log.length == 0) {
+                    return acc;
+                }
+                cortex_xdr = JSON.parse(log)['cortex_xdr'];
+                const { case_id, alert_id } = JSON.parse(log)['cortex_xdr'];
+                cortex_url.push({ case_id: case_id, alert_id: alert_id });
+                process(cortex_xdr);
+            }, []);
+        } else {
+            cortex_xdr = JSON.parse(cortex_log)['data']['cortex_xdr'];
+            process(cortex_xdr);
+        }
+        console.log('===cortex_url', cortex_url);
 
-            dateTimeStr = timestamp.slice(0, dotIndex) + '+0800';
-            const alert = { source, alert_id, name, description, dateTimeStr, rule_description };
-            if (isPANNGFW) {
-                const {
-                    action_local_ip,
-                    action_local_port,
-                    action_remote_ip,
-                    action_remote_port,
-                    action_pretty,
-                    alert_link
-                } = cortex_xdr;
-                alertInfo.push({
-                    ...alert,
-                    action_local_ip,
-                    action_local_port,
-                    action_remote_ip,
-                    action_remote_port,
-                    action_pretty,
-                    alert_link
-                });
-            } else {
-                const {
-                    action_local_ip,
-                    action_file_macro_sha256,
-                    action_file_name,
-                    action_file_path,
-                    action_file_sha256,
-                    action_process_image_name,
-                    action_process_image_sha256,
-                    action_process_image_command_line,
-                    action_external_hostname,
-                    actor_process_image_name,
-                    actor_process_image_path,
-                    actor_process_image_sha256,
-                    actor_process_command_line,
-                    causality_actor_process_image_name,
-                    causality_actor_process_command_line,
-                    causality_actor_process_image_path,
-                    causality_actor_process_image_sha256,
-                    os_actor_process_image_name,
-                    os_actor_process_image_path,
-                    os_actor_process_command_line,
-                    os_actor_process_image_sha256,
-                    action_pretty,
-                    host_name,
-                    host_ip,
-                    user_name,
-                    alert_link
-                } = cortex_xdr;
-                const action_list = {
-                    action_file_name,
-                    action_file_path,
-                    action_file_sha256,
-                    action_process_image_name,
-                    action_process_image_sha256,
-                    action_process_image_command_line
-                };
-                const actor_list = {
-                    actor_process_image_name,
-                    actor_process_image_path,
-                    actor_process_image_sha256,
-                    actor_process_command_line
-                };
-                const causality_actor_list = {
-                    causality_actor_process_image_name,
-                    causality_actor_process_command_line,
-                    causality_actor_process_image_path,
-                    causality_actor_process_image_sha256
-                };
-                const os_actor_list = {
-                    os_actor_process_image_name,
-                    os_actor_process_image_path,
-                    os_actor_process_command_line,
-                    os_actor_process_image_sha256
-                };
+        function process(cortex_xdr) {
+            try {
+                const { source, alert_id, case_id, name, description, detection_timestamp } = cortex_xdr;
+                console.log('===cortex_xdr', cortex_xdr);
 
-                function countValidProperties(obj) {
-                    const validPropsCount = Object.keys(obj).reduce((count, key) => {
-                        if (obj[key] !== undefined) {
-                            count++;
+                const isPANNGFW = source === 'PAN NGFW';
+                const date = new Date(parseInt(detection_timestamp, 10));
+                const pad = (n) => n.toString().padStart(2, '0');
+                let dateTimeStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+                    date.getHours()
+                )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+
+                const alert = { source, alert_id, case_id, name, description, dateTimeStr };
+                if (isPANNGFW) {
+                    const {
+                        action_local_ip,
+                        action_local_port,
+                        action_remote_ip,
+                        action_remote_port,
+                        action_pretty,
+                        alert_link
+                    } = cortex_xdr;
+                    alertInfo.push({
+                        ...alert,
+                        action_local_ip,
+                        action_local_port,
+                        action_remote_ip,
+                        action_remote_port,
+                        action_pretty,
+                        alert_link
+                    });
+                } else {
+                    const {
+                        action_local_ip,
+                        action_file_macro_sha256,
+                        action_file_name,
+                        action_file_path,
+                        action_file_sha256,
+                        action_process_image_name,
+                        action_process_image_sha256,
+                        action_process_image_command_line,
+                        action_external_hostname,
+                        actor_process_image_name,
+                        actor_process_image_path,
+                        actor_process_image_sha256,
+                        actor_process_command_line,
+                        causality_actor_process_image_name,
+                        causality_actor_process_command_line,
+                        causality_actor_process_image_path,
+                        causality_actor_process_image_sha256,
+                        os_actor_process_image_name,
+                        os_actor_process_image_path,
+                        os_actor_process_command_line,
+                        os_actor_process_image_sha256,
+                        action_pretty,
+                        host_name,
+                        host_ip,
+                        user_name,
+                        alert_link
+                    } = cortex_xdr;
+                    const action_list = {
+                        action_file_name,
+                        action_file_path,
+                        action_file_sha256,
+                        action_process_image_name,
+                        action_process_image_sha256,
+                        action_process_image_command_line
+                    };
+                    const actor_list = {
+                        actor_process_image_name,
+                        actor_process_image_path,
+                        actor_process_image_sha256,
+                        actor_process_command_line
+                    };
+                    const causality_actor_list = {
+                        causality_actor_process_image_name,
+                        causality_actor_process_command_line,
+                        causality_actor_process_image_path,
+                        causality_actor_process_image_sha256
+                    };
+                    const os_actor_list = {
+                        os_actor_process_image_name,
+                        os_actor_process_image_path,
+                        os_actor_process_command_line,
+                        os_actor_process_image_sha256
+                    };
+
+                    function countValidProperties(obj) {
+                        const validPropsCount = Object.keys(obj).reduce((count, key) => {
+                            if (obj[key] !== undefined) {
+                                count++;
+                            }
+                            return count;
+                        }, 0);
+                        return validPropsCount;
+                    }
+
+                    const actionPropsCount = countValidProperties(action_list)
+                        ? countValidProperties(action_list) + 1
+                        : 0;
+                    const actorPropsCount = countValidProperties(actor_list);
+                    const causalityPropsCount = countValidProperties(causality_actor_list);
+                    const osPropsCount = countValidProperties(os_actor_list);
+                    const maxCount = Math.max(actionPropsCount, actorPropsCount, causalityPropsCount, osPropsCount);
+
+                    const action_cmd_length = action_process_image_command_line
+                        ? action_process_image_command_line.length
+                        : 0;
+                    const actor_cmd_length = actor_process_command_line ? actor_process_command_line.length : 0;
+                    const causality_cmd_length = causality_actor_process_command_line
+                        ? causality_actor_process_command_line.length
+                        : 0;
+                    const os_cmd_length = os_actor_process_command_line ? os_actor_process_command_line.length : 0;
+                    const lengths = [action_cmd_length, actor_cmd_length, causality_cmd_length, os_cmd_length];
+                    const maxLength = Math.max(...lengths);
+
+                    let filename;
+                    let filepath;
+                    let sha256;
+                    let cmd;
+
+                    if (action_cmd_length === maxLength && actionPropsCount === maxCount) {
+                        if (!WhiteFilehash(action_file_sha256 || action_process_image_sha256)) {
+                            sha256 = action_file_sha256 || action_process_image_sha256;
                         }
-                        return count;
-                    }, 0);
-                    return validPropsCount;
+                        filename = action_file_name || action_process_image_name;
+                        filepath = action_file_path;
+                        cmd = action_process_image_command_line;
+                    } else if (actor_cmd_length === maxLength && actorPropsCount === maxCount) {
+                        if (!WhiteFilehash(actor_process_image_sha256)) {
+                            sha256 = actor_process_image_sha256;
+                        }
+                        filename = actor_process_image_name;
+                        filepath = actor_process_image_path;
+                        cmd = actor_process_command_line;
+                    } else if (causality_cmd_length === maxLength && causalityPropsCount === maxCount) {
+                        if (!WhiteFilehash(causality_actor_process_image_sha256)) {
+                            sha256 = causality_actor_process_image_sha256;
+                        }
+                        filename = causality_actor_process_image_name;
+                        filepath = causality_actor_process_image_path;
+                        cmd = causality_actor_process_command_line;
+                    } else if (os_actor_process_image_name && osPropsCount === maxCount) {
+                        if (!WhiteFilehash(os_actor_process_image_sha256)) {
+                            sha256 = os_actor_process_image_sha256;
+                        }
+                        filename = os_actor_process_image_name;
+                        filepath = os_actor_process_image_path;
+                        cmd = os_actor_process_command_line;
+                    }
+
+                    alertInfo.push({
+                        ...alert,
+                        host_name,
+                        host_ip,
+                        alert_link,
+                        user_name,
+                        filename,
+                        filepath,
+                        cmd,
+                        sha256,
+                        action_pretty,
+                        action_local_ip,
+                        action_file_macro_sha256,
+                        action_external_hostname
+                    });
                 }
-
-                const actionPropsCount = countValidProperties(action_list) ? countValidProperties(action_list) + 1 : 0;
-                const actorPropsCount = countValidProperties(actor_list);
-                const causalityPropsCount = countValidProperties(causality_actor_list);
-                const osPropsCount = countValidProperties(os_actor_list);
-                const maxCount = Math.max(actionPropsCount, actorPropsCount, causalityPropsCount, osPropsCount);
-
-                const action_cmd_length = action_process_image_command_line
-                    ? action_process_image_command_line.length
-                    : 0;
-                const actor_cmd_length = actor_process_command_line ? actor_process_command_line.length : 0;
-                const causality_cmd_length = causality_actor_process_command_line
-                    ? causality_actor_process_command_line.length
-                    : 0;
-                const os_cmd_length = os_actor_process_command_line ? os_actor_process_command_line.length : 0;
-                const lengths = [action_cmd_length, actor_cmd_length, causality_cmd_length, os_cmd_length];
-                const maxLength = Math.max(...lengths);
-
-                let filename;
-                let filepath;
-                let sha256;
-                let cmd;
-
-                if (action_cmd_length === maxLength && actionPropsCount === maxCount) {
-                    if (!WhiteFilehash(action_file_sha256 || action_process_image_sha256)) {
-                        sha256 = action_file_sha256 || action_process_image_sha256;
-                    }
-                    filename = action_file_name || action_process_image_name;
-                    filepath = action_file_path;
-                    cmd = action_process_image_command_line;
-                } else if (actor_cmd_length === maxLength && actorPropsCount === maxCount) {
-                    if (!WhiteFilehash(actor_process_image_sha256)) {
-                        sha256 = actor_process_image_sha256;
-                    }
-                    filename = actor_process_image_name;
-                    filepath = actor_process_image_path;
-                    cmd = actor_process_command_line;
-                } else if (causality_cmd_length === maxLength && causalityPropsCount === maxCount) {
-                    if (!WhiteFilehash(causality_actor_process_image_sha256)) {
-                        sha256 = causality_actor_process_image_sha256;
-                    }
-                    filename = causality_actor_process_image_name;
-                    filepath = causality_actor_process_image_path;
-                    cmd = causality_actor_process_command_line;
-                } else if (os_actor_process_image_name && osPropsCount === maxCount) {
-                    if (!WhiteFilehash(os_actor_process_image_sha256)) {
-                        sha256 = os_actor_process_image_sha256;
-                    }
-                    filename = os_actor_process_image_name;
-                    filepath = os_actor_process_image_path;
-                    cmd = os_actor_process_command_line;
-                }
-
-                alertInfo.push({
-                    ...alert,
-                    host_name,
-                    host_ip,
-                    alert_link,
-                    user_name,
-                    filename,
-                    filepath,
-                    cmd,
-                    sha256,
-                    action_pretty,
-                    action_local_ip,
-                    action_file_macro_sha256,
-                    action_external_hostname
-                });
+            } catch (error) {
+                console.error(`Error: ${error.message}`);
             }
-        } catch (error) {
-            console.error(`Error: ${error.message}`);
         }
 
         return alertInfo;
     }
-    const alertInfo = parseLog(rawLog);
-
+    const alertInfo = parseLog(rawLog_debug);
     /**
      * Define three functions for handling alert information:
      * generateDescription creates a description for each alert, and displays the combined description in an alert box
@@ -1234,10 +1257,9 @@ function cortexAlertHandler(...kwargs) {
                 action_remote_ip,
                 action_remote_port,
                 action_pretty,
-                description,
                 alert_link,
-                rule_description,
-                action_external_hostname
+                action_external_hostname,
+                dateTimeStr
             } = info;
             let unPanNgfw = [
                 'host_name',
@@ -1250,10 +1272,7 @@ function cortexAlertHandler(...kwargs) {
                 'user_name',
                 'action_local_ip'
             ];
-            if (description && description.includes('xdr_data')) {
-                console.log(rule_description);
-                description = rule_description;
-            }
+
             const cachedMappingContent = GM_getValue('cachedMappingContent', null);
             if (source === 'PAN NGFW') {
                 const desc = `Observed ${name}\ntimestamp: ${dateTimeStr}\nSrcip: ${action_local_ip}   Srcport: ${action_local_port}\nDstip: ${action_remote_ip}   Dstport: ${action_remote_port}\nAction: ${action_pretty}\n${
@@ -1269,10 +1288,10 @@ function cortexAlertHandler(...kwargs) {
                     comment = '\nPlease verify if the File is legitimate.   IF NOT, please Remove the File.\n';
                 }
                 let desc = `Observed ${
-                    name || description
-                }\ntimestamp: ${dateTimeStr}\n</span>action: ${action_pretty}\n`;
+                    name || summary
+                }\ntimestamp(<span class="red_highlight">GMT+8</span>): </span>${dateTimeStr}\n</span>action: ${action_pretty}\n`;
                 if (action_external_hostname) {
-                    desc += `\n<span class="red_highlight">action_external_hostname: ${action_external_hostname}`;
+                    desc += `<span class="red_highlight">action_external_hostname: ${action_external_hostname}\n</span>`;
                 }
                 for (const key of unPanNgfw) {
                     console.log(key);
@@ -1301,10 +1320,11 @@ function cortexAlertHandler(...kwargs) {
     }
 
     function openCard() {
+        let url = [];
         for (const info of alertInfo) {
-            const { source, alert_id } = info;
+            const { source, alert_id, case_id } = info;
             if (orgNavigator) {
-                let cardURL;
+                let cardURL, case_url;
                 switch (source) {
                     case 'XDR Analytics':
                         cardURL = `${orgNavigator}card/analytics2/${alert_id}`;
@@ -1316,7 +1336,17 @@ function cortexAlertHandler(...kwargs) {
                         cardURL = `${orgNavigator}card/alert/${alert_id}`;
                         break;
                 }
-                window.open(cardURL, '_blank');
+                case_url = `${orgNavigator}incidents/overview?caseId=${case_id}`;
+                if (!url.includes(case_url)) {
+                    window.open(case_url, '_blank');
+                    console.log('===', case_url);
+                }
+                url.push(case_url);
+                if (!url.includes(cardURL)) {
+                    window.open(cardURL, '_blank');
+                    console.log('===', cardURL);
+                }
+                url.push(cardURL);
             } else {
                 showFlag('error', '', `There is no <strong>${LogSourceDomain}</strong> Navigator on Cortex`, 'auto');
             }
