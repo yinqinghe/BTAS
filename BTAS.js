@@ -5381,6 +5381,35 @@ function GGA_AlertHandler() {
     addButton('GGA', 'GGA', generateDescription);
 }
 
+function MMB_AlertHandler() {
+    const cachedMappingContent = GM_getValue('cachedMappingContent', null);
+
+    function generateDescription() {
+        let srcip, dstip;
+        let tt = false;
+        let start = `https://${cachedMappingContent['kkb_url']}/app/discover#/view/a5308c30-5193-11f0-995b-312000e37d97?_g=(filters:!(`;
+        let kibana = $('#field-customfield_10308 .flooded').text().trim().split('\n')[0];
+        const match_src = kibana.match(/data\.srcip:&#39;((\d{1,3}\.){3}\d{1,3})/);
+        srcip = match_src ? match_src[1] : null;
+        if (srcip) {
+            start += `('$state':(store:appState),meta:(index:'wazuh-alerts-3.x-*',type:phrases,key:data.srcip,value:'${srcip}'),query:(match_phrase:(data.srcip:'${srcip}')))`;
+            tt = true;
+        }
+        const match_dst = kibana.match(/data\.dstip:&#39;((\d{1,3}\.){3}\d{1,3})/);
+        dstip = match_dst ? match_dst[1] : null;
+        if (dstip) {
+            if (tt) {
+                start += ',';
+            }
+            start += `('$state':(store:appState),meta:(index:'wazuh-alerts-3.x-*',type:phrases,key:data.dstip,value:'${dstip}'),query:(match_phrase:(data.dstip:'${dstip}')))`;
+        }
+        start += '),refreshInterval:(pause:!t,value:3600000),time:(from:now-7d/d,to:now))';
+        console.log('===', start);
+        window.open(start, '_blank');
+    }
+    addButton('MMA', 'MMA', generateDescription);
+}
+
 function RealMonitorMe() {
     let ORG = $('#customfield_10002-val').text().trim();
     let status = $('#opsbar-transitions_more').text().trim();
@@ -5835,6 +5864,9 @@ function RealTimeMonitoring() {
         }
         if (LogSourceDomain.includes(cachedMappingContent['gga'])) {
             GGA_AlertHandler();
+        }
+        if (LogSourceDomain.includes(cachedMappingContent['mmb'])) {
+            MMB_AlertHandler();
         }
     }, 3500);
 
