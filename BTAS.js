@@ -1295,7 +1295,8 @@ function cortexAlertHandler(...kwargs) {
                 action_pretty,
                 alert_link,
                 action_external_hostname,
-                dateTimeStr
+                dateTimeStr,
+                description
             } = info;
             let unPanNgfw = [
                 'host_name',
@@ -1330,11 +1331,10 @@ function cortexAlertHandler(...kwargs) {
                     desc += `<span class="red_highlight">action_external_hostname: ${action_external_hostname}\n</span>`;
                 }
                 for (const key of unPanNgfw) {
-                    console.log(key);
                     if (Object.hasOwnProperty.call(info, key)) {
                         const value = info[key];
                         console.log(key, value);
-                        if (value !== undefined) {
+                        if (value !== undefined && value !== 'N/A') {
                             if (key == 'event_evidence') {
                                 desc += `${key}: ${value.replace(/</g, '&lt;').replace(/>/g, '&gt;')}\n`;
                             } else {
@@ -1343,6 +1343,7 @@ function cortexAlertHandler(...kwargs) {
                         }
                     }
                 }
+                // desc += `description: ${description}\n`;
                 if (info['action_file_macro_sha256'] || info['sha256']) {
                     desc += `<a href="https://www.virustotal.com/gui/file/${
                         info['action_file_macro_sha256'] || info['sha256']
@@ -1620,6 +1621,9 @@ function WineventAlertHandler(...kwargs) {
     let { rawLog, summary, LogSourceDomain } = kwargs[0];
     var raw_alert = 0;
     const num_alert = $('#customfield_10300-val').text().trim();
+    const rawLog_debug = $('#field-customfield_10232 > div.twixi-wrap.verbose > div > div > div > pre').text();
+    let rawLog_debug_json = JSON.parse(rawLog_debug);
+    let host_ip = rawLog_debug_json['agent']['ip'];
     summary = summary.replace(/[\[(].*?[\])]/g, '');
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
@@ -1629,7 +1633,7 @@ function WineventAlertHandler(...kwargs) {
                 const { eventdata, system } = win;
                 const alertHost = system.computer;
                 const systemTime = system.systemTime;
-                acc.push({ systemTime, summary, alertHost, eventdata });
+                acc.push({ systemTime, summary, alertHost, eventdata, host_ip });
             } catch (error) {
                 console.error(`Error: ${error.message}`);
             }
@@ -1650,7 +1654,7 @@ function WineventAlertHandler(...kwargs) {
             alertDescriptions.push(`Log Details:\n`);
         }
         for (const info of alertInfo) {
-            let desc = `Observed${info.summary}\nHost: ${info.alertHost}\n`;
+            let desc = `Observed${info.summary}\nHost: ${info.alertHost}\nHost_IP: ${info.host_ip}\n`;
             const date = new Date(info.systemTime.split('.')[0]);
             date.setHours(date.getHours() + 16);
             desc += `systemTime(<span class="red_highlight">UTC+8</span>): ${date.toISOString().split('.')[0]}\n`;
