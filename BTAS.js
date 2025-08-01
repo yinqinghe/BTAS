@@ -182,18 +182,54 @@ function addCss() {
     function hideAllFlag() {
         $('.aui-flag').toggle();
     }
-    const button = $('<div>')
+    function CollapsedAll() {
+        const ids = ['field-customfield_10308', 'field-customfield_10219', 'field-customfield_10216'];
+        ids.forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) {
+                console.warn(`未找到元素：${id}`);
+                return;
+            }
+            if (el.classList.contains('expanded')) {
+                console.log(`${id} 当前是展开状态，执行收起`);
+                const twixi = el.querySelector('.twixi');
+                twixi.click(); // 模拟点击收起
+            }
+        });
+        const btns = [
+            'button[aria-label="Description"]',
+            'button[aria-label="Attachments"]',
+            'button[aria-label="Activity"]'
+        ];
+        btns.forEach((btn) => {
+            const el = document.querySelector(btn);
+            // console.log('===', el);
+            if (el) {
+                const expanded = el.getAttribute('aria-expanded') === 'true';
+                if (expanded) {
+                    el.click(); // 仅在未展开时点击
+                }
+                console.log('当前状态:', expanded ? '已展开' : '未展开');
+            }
+        });
+    }
+    const notice = $('<div>')
         .attr('id', 'hide-reminder')
         .addClass('aui-button toolbar-trigger  fix-button aui-button-primary')
         .append($('<span>').addClass('trigger-label').text('NOTICE'))
         .click(hideAllFlag);
-
+    const collapsed = $('<div>')
+        .attr('id', 'hide-reminder')
+        .addClass('aui-button toolbar-trigger  fix-button aui-button-primary')
+        .append($('<span>').addClass('trigger-label').text('Collapsed'))
+        .click(CollapsedAll);
     const checkExist = setInterval(function () {
         const targetDiv = document.getElementById('aui-flag-container');
         const toolbar = $('.aui-header-secondary');
+        toolbar.prepend(collapsed);
 
         if (targetDiv) {
-            toolbar.prepend(button);
+            toolbar.prepend(notice);
             clearInterval(checkExist); // 停止检查
         }
     }, 100); // 每100毫秒检查一次
@@ -1336,7 +1372,7 @@ function cortexAlertHandler(...kwargs) {
                         cardURL = `${orgNavigator}card/alert/${alert_id}`;
                         break;
                 }
-                case_url = `${orgNavigator}incidents/overview?caseId=${case_id}`;
+                case_url = `${orgNavigator}incidents/alerts_and_insights?caseId=${case_id}`;
                 if (!url.includes(case_url)) {
                     window.open(case_url, '_blank');
                     console.log('===', case_url);
@@ -1699,7 +1735,8 @@ function FortigateAlertHandler(...kwargs) {
                 from,
                 to,
                 remip,
-                ref
+                ref,
+                policyname
             } = alertInfo;
             let arr = [];
             if (summary.toLowerCase().includes('infected file detected in fortigate')) {
@@ -1739,6 +1776,7 @@ function FortigateAlertHandler(...kwargs) {
                 action: action,
                 cfgattr: cfgattr,
                 msg: msg,
+                policyname: policyname,
                 referralurl: referralurl,
                 forwardedfor: forwardedfor || undefined,
                 analyticscksum: analyticscksum,
@@ -4906,9 +4944,8 @@ function WebAccesslogAlertHandler(...kwargs) {
                         method: method,
                         path: path,
                         responseSize: parseInt(match[6], 10),
-                        serverIp: match[2],
-                        statusCode: parseInt(match[5], 10),
-                        serverIp: match[2]
+                        Source_IP: match[2],
+                        statusCode: parseInt(match[5], 10)
                     });
                 } else {
                     const regex1 =
@@ -5850,6 +5887,7 @@ function RealTimeMonitoring() {
             ticketNotify(pageData);
         }
     }, 2000);
+    addCss();
 
     // Issue page: Norm Alert
     setTimeout(() => {
@@ -5928,7 +5966,6 @@ function RealTimeMonitoring() {
     registerSearchMenu();
     registerExceptionMenu();
     registerCustomQuickReplyMenu();
-    addCss();
     MonitorDev();
     MonitorOrgEscalate();
 })();
