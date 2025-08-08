@@ -3608,7 +3608,7 @@ function SangforAlertHandler(...kwargs) {
                 }
                 console.log(matches);
                 var pattern = /event_evidence.*?(?=suffer_classify1_id_name)/g;
-                console.log(log.match(pattern));
+                // console.log(log.match(pattern));
                 let logArray = log.split(' ').filter((item) => item !== ''); //Remove extra whitespace from the string
                 if (DecoderName == 'cyberark_cef') {
                     let data_json = {
@@ -3715,6 +3715,21 @@ function SangforAlertHandler(...kwargs) {
                         src: matches.src ? matches.src : undefined
                     };
                     data_json[matches.cs9Label] = matches.cs9 ? matches.cs9 : undefined;
+                    acc.push(data_json);
+                } else if (DecoderName == 'nnt_cef') {
+                    let data_json = {
+                        'Event time': logArray.slice(0, 3).join(' '),
+
+                        'dvchost': matches.dvchost ? matches.dvchost : undefined,
+                        'reason': matches.reason ? matches.reason : undefined,
+                        'src': matches.src ? matches.src : undefined,
+                        'suser': matches.suser ? matches.suser : undefined,
+                        'filePath': matches.filePath ? matches.filePath : undefined,
+                        'fileHash': matches.fileHash ? matches.fileHash : undefined,
+                        'filePermission': matches.filePermission ? matches.filePermission : undefined,
+                        'fileModificationTime': matches.fileModificationTime.split('.')[0] + 'Z',
+                        'outcome': matches.outcome ? matches.outcome : undefined
+                    };
                     acc.push(data_json);
                 } else if (window.location.href.includes('macaumss')) {
                     acc.push({
@@ -5748,7 +5763,8 @@ function RealTimeMonitoring() {
                 'json': JsonAlertHandler,
                 'f5-asm': F5AsmAlertHandler,
                 'sangfor': SangforAlertHandler,
-                'checkpoint-harmony-email-saas': CheckPointEmailHandler
+                'checkpoint-harmony-email-saas': CheckPointEmailHandler,
+                'nnt_cef': SangforAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
