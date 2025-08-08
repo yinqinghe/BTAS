@@ -367,6 +367,7 @@ function registerSearchMenu() {
             url: url
         },
         { name: 'VT', url: 'https://www.virustotal.com/gui/search/%s' },
+        { name: 'whatismyipaddress', url: 'https://whatismyipaddress.com/ip/%s' },
         { name: 'AbuseIPDB', url: 'https://www.abuseipdb.com/check/%s' },
         {
             name: 'Base64 Decode',
