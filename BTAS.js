@@ -1315,16 +1315,9 @@ function cortexAlertHandler(...kwargs) {
             if (source === 'PAN NGFW') {
                 const desc = `Observed ${name}\ntimestamp: ${dateTimeStr}\nSrcip: ${action_local_ip}   Srcport: ${action_local_port}\nDstip: ${action_remote_ip}   Dstport: ${action_remote_port}\nAction: ${action_pretty}\n${
                     LogSourceDomain === cachedMappingContent['cca'] ? 'Cortex Portal: ' + alert_link + '\n' : ''
-                }\n\nPlease help to verify if this activity is legitimate.\n`;
+                }\n`;
                 alertDescriptions.push(desc);
             } else {
-                let comment = '\nPlease help to verify if this activity is legitimate.\n';
-                if (
-                    summary.toLowerCase().includes('wildfire malware') ||
-                    summary.toLowerCase().includes('local analysis malware')
-                ) {
-                    comment = '\nPlease verify if the File is legitimate.   IF NOT, please Remove the File.\n';
-                }
                 let desc = `Observed ${
                     name || summary
                 }\ntimestamp(<span class="red_highlight">GMT+8</span>): </span>${dateTimeStr}\n</span>action: ${action_pretty}\n`;
@@ -1350,7 +1343,7 @@ function cortexAlertHandler(...kwargs) {
                         info['action_file_macro_sha256'] || info['sha256']
                     }">https://www.virustotal.com/gui/file/${info['action_file_macro_sha256'] || info['sha256']}</a>\n`;
                 }
-                alertDescriptions.push(desc + comment);
+                alertDescriptions.push(desc);
             }
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -1458,7 +1451,7 @@ function HTSCAlertHandler(...kwargs) {
         const alertDescriptions = [];
         for (const info of alertInfo) {
             const { attackType, hostRisk, srcIP, hostName, dstIP, eventEvidence } = info;
-            const desc = `Observed ${attackType} Attack\nhostRisk: ${hostRisk}\nSrc_IP: ${srcIP}\nhostname: ${hostName}\nDst_IP: ${dstIP}\nevent_evidence: ${eventEvidence}\n\nPlease help to verify if this activity is legitimate.\n`;
+            const desc = `Observed ${attackType} Attack\nhostRisk: ${hostRisk}\nSrc_IP: ${srcIP}\nhostname: ${hostName}\nDst_IP: ${dstIP}\nevent_evidence: ${eventEvidence}\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -1536,7 +1529,6 @@ function VMCEFAlertHandler(...kwargs) {
                     desc += `${index}: ${value}\n`;
                 }
             });
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -1595,7 +1587,6 @@ function CBAlertHandler(...kwargs) {
                     desc += `${index}: ${value}\n`;
                 }
             });
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -1625,6 +1616,8 @@ function WineventAlertHandler(...kwargs) {
     const rawLog_debug = $('#field-customfield_10232 > div.twixi-wrap.verbose > div > div > div > pre').text();
     let rawLog_debug_json = JSON.parse(rawLog_debug);
     let host_ip = rawLog_debug_json['agent']['ip'];
+    let Host_name = rawLog_debug_json['agent']['name'];
+
     summary = summary.replace(/[\[(].*?[\])]/g, '');
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
@@ -1667,7 +1660,6 @@ function WineventAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += '\n' + 'Please help to verify if this activity is legitimate.' + '\n';
             alertDescriptions.push(desc);
         }
         if (LogSourceDomain == cachedMappingContent['gga']) {
@@ -1841,26 +1833,7 @@ function FortigateAlertHandler(...kwargs) {
                     desc += `${index}: ${value}\n`;
                 }
             });
-            let comment = '';
-            if (LogSourceDomain == cachedMappingContent['kka']) {
-                comment = '\n请帮助验证此活动是否合法。\n';
-                if (
-                    summary.toLowerCase().includes('to malware ip(s)') ||
-                    summary.toLowerCase().includes('to tor ip(s)')
-                ) {
-                    comment = '\n请验证该 IP 是否合法。如果不是，请屏蔽目标 IP\n';
-                }
-            } else {
-                comment = '\nPlease help to verify if this activity is legitimate.\n';
-                if (
-                    summary.toLowerCase().includes('to malware ip(s)') ||
-                    summary.toLowerCase().includes('to tor ip(s)')
-                ) {
-                    comment = '\nPlease verify if the IP is legitimate.   If NOT, please block the dst ip\n';
-                }
-            }
 
-            desc += comment;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -1949,7 +1922,6 @@ function CSAlertHandler(...kwargs) {
                     desc += `${index}: ${value}\n`;
                 }
             });
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -2023,9 +1995,6 @@ function SophosAlertHandler(...kwargs) {
                     }
                 }
             }
-            if (!info.summary.includes('Failed to protect computer')) {
-                desc += '\n' + 'Please help to verify if this activity is legitimate.' + '\n';
-            }
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -2095,7 +2064,6 @@ function SpemAlertHandler(...kwargs) {
                     desc += `${index}: ${value}\n`;
                 }
             });
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -2284,7 +2252,6 @@ function AwsAlertHandler(...kwargs) {
                     }
                 }
             });
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -2354,7 +2321,6 @@ function AzureAlertHandler(...kwargs) {
                     }
                 }
             });
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -2479,11 +2445,7 @@ Vulnerability Information:</br>
                     }
                 });
             }
-            let comment = '\nPlease help to verify if this activity is legitimate.\n</br>';
-            if (summary.toLowerCase().includes('to malware ip(s)') || summary.toLowerCase().includes('to tor ip(s)')) {
-                comment = '\nPlease verify if the IP is legitimate.   If NOT, please block the dst ip\n';
-            }
-            desc += comment;
+
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -2566,7 +2528,6 @@ function ImpervaincCEFAlertHandler(...kwargs) {
                     desc += `${index}: ${value}\n`;
                 }
             });
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -2706,7 +2667,6 @@ function AzureGraphAlertHandler(...kwargs) {
                         }
                     }
                 }
-                desc += `\nPlease verify if the activity is legitimate.\n`;
                 alertDescriptions.push(desc);
             }
         }
@@ -2839,7 +2799,6 @@ function ProofpointAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -2902,7 +2861,6 @@ function ZscalerAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease verify if the ip is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n'); //Can achieve automatic deduplication
@@ -2963,7 +2921,6 @@ function PulseAlertHandler(...kwargs) {
 
         let desc = `Observed ${summary.split(']')[1]}\n`;
         desc += alertInfo;
-        desc += `\n\nPlease verify if the login is legitimate.\n`;
         alertDescriptions.push(desc);
         const alertMsg = [...new Set(alertDescriptions)].join('\n'); //Can achieve automatic deduplication
         showDialog(alertMsg);
@@ -3087,7 +3044,6 @@ function Risky_Countries_AlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -3308,11 +3264,7 @@ function AlicloudAlertHandler(...kwargs) {
                     }
                 }
             }
-            if (LogSourceDomain == cachedMappingContent['kka']) {
-                desc += `\n请验证该活动是否合法。\n`;
-            } else {
-                desc += `\nPlease verify if the activity is legitimate.\n`;
-            }
+
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -3422,7 +3374,6 @@ function ThreatMatrixAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease verify if the login is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -3578,7 +3529,6 @@ function DarktraceAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease help to verify if this activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -3792,7 +3742,6 @@ function SangforAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease verify if the activity is legitimate.\n`;
 
             alertDescriptions.push(desc);
         }
@@ -3871,7 +3820,6 @@ function RadwareAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -3974,7 +3922,6 @@ function CarbonAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -4045,7 +3992,6 @@ function MultipleAccountAlertHandler(...kwargs) {
         desc += [...new Set(single)].join('\n');
         desc += '\n';
         desc += [...new Set(alertDescriptions)].join('\n');
-        desc += `Please verify if the activity is legitimate.\n`;
         showDialog(desc);
     }
     addButton('generateDescription', 'Description', generateDescription);
@@ -4472,11 +4418,7 @@ function MDE365AlertHandler(...kwargs) {
                     }
                 }
             }
-            if (LogSourceDomain == cachedMappingContent['kka']) {
-                desc += `\n请验证该活动是否合法。\n`;
-            } else {
-                desc += `\nPlease verify if the activity is legitimate.\n`;
-            }
+
             alertDescriptions.push(desc);
         }
     }
@@ -4545,11 +4487,6 @@ function MDE365AlertHandler(...kwargs) {
                     MDEURL += incident_url;
                 }
                 desc += `MDE URL: \n${MDEURL}\n`;
-            }
-            if (LogSourceDomain == cachedMappingContent['kka']) {
-                desc += `\n请验证该活动是否合法。\n`;
-            } else {
-                desc += `\nPlease verify if the activity is legitimate.\n`;
             }
 
             alertDescriptions.push(desc);
@@ -4726,7 +4663,6 @@ function WindowsSysAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -4793,7 +4729,6 @@ function ClarotyAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -4870,7 +4805,6 @@ function FireeyeAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -5023,7 +4957,6 @@ function WebAccesslogAlertHandler(...kwargs) {
                     }
                 }
             }
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -5086,7 +5019,6 @@ function FireeyeEtpAlertHandler(...kwargs) {
                     }
                 }
             });
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -5145,7 +5077,6 @@ function SentinelOneAlertHandler(...kwargs) {
                     }
                 }
             });
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -5218,7 +5149,6 @@ function JsonAlertHandler(...kwargs) {
                     }
                 }
             });
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -5287,7 +5217,6 @@ function F5AsmAlertHandler(...kwargs) {
                     }
                 }
             });
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -5346,7 +5275,6 @@ function CheckPointEmailHandler(...kwargs) {
                     }
                 }
             });
-            desc += `\nPlease verify if the activity is legitimate.\n`;
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -5382,9 +5310,6 @@ function NoLogAlertHandler(...kwargs) {
             alertDescriptions += `\nLog Source: ${log_source}`;
             alertDescriptions += `\nlast received time:\n`;
         }
-
-        alertDescriptions += `\nPlease verify if the activity is legitimate.\n`;
-
         showDialog(alertDescriptions);
     }
     addButton('generateDescription', 'Description', generateDescription);
