@@ -2189,6 +2189,7 @@ function AwsAlertHandler(...kwargs) {
                         'content_type': content
                     });
                 } else {
+                    let accessKeyId = aws?.userIdentity?.accessKeyId;
                     acc.push({
                         EventTime: aws?.eventTime,
                         EventName: aws?.eventName,
@@ -2196,6 +2197,7 @@ function AwsAlertHandler(...kwargs) {
                         ExternalIP: aws?.external_ip,
                         Domain: aws?.domain,
                         User: aws?.userIdentity?.arn,
+                        accessKeyId: accessKeyId.slice(0, 5) + '*'.repeat(accessKeyId.length - 5),
                         UserAgent: aws?.userAgent,
                         PrincipalId: aws?.userIdentity?.principalId,
                         Result: aws?.errorCode,
