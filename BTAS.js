@@ -5285,9 +5285,73 @@ function CheckPointEmailHandler(...kwargs) {
     addButton('generateDescription', 'Description', generateDescription);
 }
 
+function NetsKopeAlertHandler(...kwargs) {
+    const { rawLog, summary } = kwargs[0];
+    var raw_alert = 0;
+    function parseLog(rawLog) {
+        const alertInfo = rawLog.reduce((acc, log) => {
+            try {
+                if (log.length == 0) {
+                    return acc;
+                }
+                const regex = /"[^"]*"|\b(?:POST|GET|PUT|DELETE)\b|\b(?:https?|TLSv\d\.\d)\b|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b|\b\d{3}\b|[A-Z]{2}|(?:Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{2}:\d{2}:\d{2}/g;
+                const blocks = log.match(regex);
+                console.log(blocks);
+                let result = {
+                    'createtime': blocks[0],
+                    'source_ip': blocks[1],
+                    'des_ip': blocks[31],
+                    'User': blocks[2],
+                    'content_type': blocks[6],
+                    'status_code': blocks[7],
+                    'Geo_location': blocks[11],
+                    'host': blocks[45],
+                    'sni': blocks[32],
+                    'ua': blocks[5],
+                    'alert_name': blocks[28],
+                }
+                console.log('===', result);
+                acc.push(result);
+                raw_alert += 1;
+            } catch (error) {
+                console.log(`Error: ${error}`);
+            }
+            return acc;
+        }, []);
+        return alertInfo;
+    }
+
+    const alertInfo = parseLog(rawLog);
+    const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
+    function generateDescription() {
+        const alertDescriptions = [];
+        for (const info of alertInfo) {
+            let desc = `Observed ${summary.split(']').at(-1)}\n`;
+            Object.entries(info).forEach(([index, value]) => {
+                if (value !== undefined && value !== ' ' && index != 'Summary') {
+                    if (index == 'time') {
+                        desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
+                    } else {
+                        desc += `${index}: ${value}\n`;
+                    }
+                }
+            });
+            alertDescriptions.push(desc);
+        }
+        const alertMsg = [...new Set(alertDescriptions)].join('\n');
+        showDialog(alertMsg);
+    }
+    addButton('generateDescription', 'Description', generateDescription);
+}
+
+
 function NoLogAlertHandler(...kwargs) {
     const { summary } = kwargs[0];
-
     function generateDescription() {
         let alertDescriptions = '';
         alertDescriptions += `Observed ${summary.split(']')[1]}\n`;
@@ -5691,7 +5755,8 @@ function RealTimeMonitoring() {
                 'f5-asm': F5AsmAlertHandler,
                 'sangfor': SangforAlertHandler,
                 'checkpoint-harmony-email-saas': CheckPointEmailHandler,
-                'nnt_cef': SangforAlertHandler
+                'nnt_cef': SangforAlertHandler,
+                'netskope': NetsKopeAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
