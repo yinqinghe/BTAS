@@ -3683,6 +3683,19 @@ function SangforAlertHandler(...kwargs) {
                         'outcome': matches.outcome ? matches.outcome : undefined
                     };
                     acc.push(data_json);
+                } else if (DecoderName == 'trendmicro_cef') {
+                    let data_json = {
+                        'Event time': logArray.slice(0, 3).join(' '),
+                        'dvchost': matches.dvc ? matches.dvc : undefined,
+                        'fname': matches.fname ? matches.fname : undefined,
+                        'msg': matches.msg ? matches.msg : undefined,
+                        'shost': matches.shost ? matches.shost : undefined,
+                        'src': matches.src ? matches.src : undefined,
+                    };
+                    data_json[matches.cs1Label] = matches.cs1 ? matches.cs1 : undefined;
+                    data_json[matches.cn1Label] = matches.cn1 ? matches.cn1 : undefined;
+
+                    acc.push(data_json);
                 } else if (window.location.href.includes('macaumss')) {
                     acc.push({
                         'Event time': logArray.slice(0, 3).join(' '),
@@ -5294,21 +5307,24 @@ function NetsKopeAlertHandler(...kwargs) {
                 if (log.length == 0) {
                     return acc;
                 }
-                const regex = /"[^"]*"|\b(?:POST|GET|PUT|DELETE)\b|\b(?:https?|TLSv\d\.\d)\b|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b|\b\d{3}\b|[A-Z]{2}|(?:Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{2}:\d{2}:\d{2}/g;
+                const regex = /"[^"]*"|\b(?:POST|GET|PUT|DELETE)\b|\b(?:https?|TLSv\d\.\d)\b|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b|\b\d{3}\b|[A-Z]{2}|\b(?:Block|No\sBlock|Allow)\b|(?:Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{2}:\d{2}:\d{2}/g;
+
+                // const regex = /"[^"]*"|\b(?:POST|GET|PUT|DELETE)\b|\b(?:https?|TLSv\d\.\d)\b|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b|\b\d{3}\b|[A-Z]{2}|(?:Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{2}:\d{2}:\d{2}/g;
                 const blocks = log.match(regex);
                 console.log(blocks);
                 let result = {
                     'createtime': blocks[0],
                     'source_ip': blocks[1],
-                    'des_ip': blocks[31],
+                    'des_ip': blocks[32],
                     'User': blocks[2],
                     'content_type': blocks[6],
                     'status_code': blocks[7],
                     'Geo_location': blocks[11],
-                    'host': blocks[45],
-                    'sni': blocks[32],
+                    'host': blocks[46],
+                    'sni': blocks[33],
                     'ua': blocks[5],
-                    'alert_name': blocks[28],
+                    'alert_name': blocks[29],
+                    // 'action': blocks[28],
                 }
                 console.log('===', result);
                 acc.push(result);
@@ -5756,7 +5772,8 @@ function RealTimeMonitoring() {
                 'sangfor': SangforAlertHandler,
                 'checkpoint-harmony-email-saas': CheckPointEmailHandler,
                 'nnt_cef': SangforAlertHandler,
-                'netskope': NetsKopeAlertHandler
+                'netskope': NetsKopeAlertHandler,
+                'trendmicro_cef':SangforAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
