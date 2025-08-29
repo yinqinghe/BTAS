@@ -3577,16 +3577,24 @@ function SangforAlertHandler(...kwargs) {
                     acc.push(data_json);
                 } else if (DecoderName == 'trellix_cef') {
                     let data_json = {
-                        filePath: matches.filePath ? matches.filePath : undefined,
                         rt: matches.rt ? matches.rt : undefined,
+                        dvchost: matches.dvchost ? matches.dvchost : undefined,
+                        dvc: matches.dvc ? matches.dvc : undefined,
+                        suser: matches.suser ? matches.suser.replace(/[<>]/g, '') : undefined,
+                        src: matches.src ? matches.src : undefined,
                         duser: matches.duser ? matches.duser : undefined,
+                        dst: matches.dst ? matches.dst : undefined,
+                        sourceDnsDomain: matches.sourceDnsDomain ? matches.sourceDnsDomain : undefined,
                         msg: matches.msg ? matches.msg : undefined,
                         act: matches.act ? matches.act : undefined,
-                        suser: matches.suser ? matches.suser.replace(/[<>]/g, '') : undefined,
+                        subject: matches.subject ? matches.subject : undefined,
                         fileType: matches.fileType ? matches.fileType : undefined,
-                        subject: matches.subject ? matches.subject : undefined
+                        filePath: matches.filePath ? matches.filePath : undefined,
+                        request: matches.request ? matches.request : undefined,
                     };
                     data_json[matches.cs1Label] = matches.cs1 ? matches.cs1 : undefined;
+                    data_json[matches.cs4Label] = matches.cs4 ? matches.cs4 : undefined;
+                    data_json[matches.cs6Label] = matches.cs6 ? matches.cs6 : undefined;
                     data_json['Malicious_Domain'] = matches.cs5 ? matches.cs5 : undefined;
                     data_json[matches.flexString2Label] = matches.flexString2 ? matches.flexString2 : undefined;
                     acc.push(data_json);
