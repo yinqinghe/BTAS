@@ -1615,8 +1615,8 @@ function WineventAlertHandler(...kwargs) {
     const num_alert = $('#customfield_10300-val').text().trim();
     const rawLog_debug = $('#field-customfield_10232 > div.twixi-wrap.verbose > div > div > div > pre').text();
     let rawLog_debug_json = JSON.parse(rawLog_debug);
-    let host_ip = rawLog_debug_json['agent']['ip'];
-    let Host_name = rawLog_debug_json['agent']['name'];
+    let host_ip = rawLog_debug_json?.agent?.ip || "";
+    let host_name = rawLog_debug_json?.agent?.name || "";
 
     summary = summary.replace(/[\[(].*?[\])]/g, '');
     function parseLog(rawLog) {
@@ -1701,6 +1701,7 @@ function FortigateAlertHandler(...kwargs) {
                 }
                 jsonData[key] = value;
             }
+            console.log('===jsonData', jsonData);
             acc.push(jsonData);
             return acc;
         }, []);
@@ -1733,7 +1734,8 @@ function FortigateAlertHandler(...kwargs) {
                 to,
                 remip,
                 ref,
-                policyname
+                policyname,
+                filename
             } = alertInfo;
             let arr = [];
             if (summary.toLowerCase().includes('infected file detected in fortigate')) {
@@ -1770,6 +1772,7 @@ function FortigateAlertHandler(...kwargs) {
                 devname: devname,
                 user: user,
                 url: url,
+                filename:filename,
                 action: action,
                 cfgattr: cfgattr,
                 msg: msg,
@@ -2352,6 +2355,7 @@ function paloaltoAlertHandler(...kwargs) {
         const alertInfo = rawLog.reduce((acc, log) => {
             try {
                 let logArray = log.split(',');
+                console.log('===', logArray);
                 let logType = logArray[3];
                 if (logType == 'GLOBALPROTECT') {
                     acc.push({
