@@ -2389,8 +2389,8 @@ function paloaltoAlertHandler(...kwargs) {
                         }
                     }
                     let vt_url = 'https://www.virustotal.com/gui/search/' + logArray[31].replace('"', '').split('/')[0];
-                    let description = `</br>Timestamp: ${logArray[0].split(' ').slice(0, 3).join(' ')}</br>
-Device: ${logArray[0].split(' ').slice(3, 5).join(' ')}</br>
+                    let description = `</br>Timestamp: ${logArray[1]}</br>
+Device: ${logArray[59]}</br>
 Log Details:
     <ul><li>Event Time: ${logArray[1]}</li>
     <li>Log ID: ${logArray[2]}</li>
@@ -2417,8 +2417,16 @@ Vulnerability Information:</br>
     <ul><li>Exploit Type: ${logArray[69]}</li>
     <li>Attack Vector: ${logArray[111]}</li>
     <li>Affected Technology: ${logArray[112]},${logArray[113]}</li>
-    <li>Malware Potential:${malware_potential}</li>
-                                                    </ul>`;
+    <li>Malware Potential:${malware_potential}</li></ul>`;
+                    if (logArray[32].includes('Email Link')) {
+                        let email_info = `
+                        Email Link Information:</br>
+    <ul><li>Sender: ${logArray[50]}</li>
+    <li>Target recipients: ${logArray[52]}</li>
+    <li>Malicious link: ${logArray[31]}</li>
+    <li>Subject:${logArray[51]}</li></ul>`
+                        description+=email_info
+                    }
                     raw_alert += 1;
                     acc.push(description);
                 }
