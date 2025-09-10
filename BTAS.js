@@ -3691,7 +3691,6 @@ function SangforAlertHandler(...kwargs) {
                 } else if (DecoderName == 'nnt_cef') {
                     let data_json = {
                         'Event time': logArray.slice(0, 3).join(' '),
-
                         'dvchost': matches.dvchost ? matches.dvchost : undefined,
                         'reason': matches.reason ? matches.reason : undefined,
                         'src': matches.src ? matches.src : undefined,
@@ -3702,6 +3701,23 @@ function SangforAlertHandler(...kwargs) {
                         'fileModificationTime': matches.fileModificationTime.split('.')[0] + 'Z',
                         'outcome': matches.outcome ? matches.outcome : undefined
                     };
+                    acc.push(data_json);
+                } else if (DecoderName == 'forcepoint_cef') {
+                    let data_json = {
+                        'Event time': logArray.slice(0, 3).join(' '),
+                        'dvchost': matches.dvc ? matches.dvc : undefined,
+                        'src': matches.src ? matches.src : undefined,
+                        'spt': matches.spt ? matches.spt : undefined,
+                        'dst': matches.dst ? matches.dst : undefined,
+                        'dpt': matches.dpt ? matches.dpt : undefined,
+                        'act': matches.act ? matches.act : undefined,
+                        'request': matches.request ? matches.request : undefined,
+                        'requestClientApplication': matches.requestClientApplication ? matches.requestClientApplication : undefined,
+                        'requestMethod': matches.requestMethod ? matches.requestMethod : undefined,
+                        'suer': matches.suer ? matches.suer : undefined,
+                    };
+                    data_json[matches.cs1Label] = matches.cs1 ? matches.cs1 : undefined;
+                    data_json[matches.cs3Label] = matches.cs3 ? matches.cs3 : undefined;
                     acc.push(data_json);
                 } else if (DecoderName == 'trendmicro_cef') {
                     let data_json = {
@@ -3714,7 +3730,6 @@ function SangforAlertHandler(...kwargs) {
                     };
                     data_json[matches.cs1Label] = matches.cs1 ? matches.cs1 : undefined;
                     data_json[matches.cn1Label] = matches.cn1 ? matches.cn1 : undefined;
-
                     acc.push(data_json);
                 } else if (window.location.href.includes('macaumss')) {
                     acc.push({
@@ -5793,7 +5808,8 @@ function RealTimeMonitoring() {
                 'checkpoint-harmony-email-saas': CheckPointEmailHandler,
                 'nnt_cef': SangforAlertHandler,
                 'netskope': NetsKopeAlertHandler,
-                'trendmicro_cef':SangforAlertHandler
+                'trendmicro_cef': SangforAlertHandler,
+                'forcepoint_cef': SangforAlertHandler,
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
