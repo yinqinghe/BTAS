@@ -5709,12 +5709,13 @@ function RealTimeMonitoring() {
     if (
         (window.location.href.includes('filter=15200') ||
             window.location.href.includes('filter=26405') ||
+            window.location.href.includes('filter=54400') ||
             window.location.href.includes('filter=13300')) &&
         !window.location.href.includes('MSS')
     ) {
         console.log('#### Code includes filter run ####');
         const NotifyControls = createNotifyControls();
-        if (window.location.href.includes('filter=15200') || window.location.href.includes('filter=26405')) {
+        if (window.location.href.includes('filter=15200') || window.location.href.includes('filter=26405') || window.location.href.includes('filter=54400')) {
             setInterval(() => {
                 notifyKey = [];
                 $('.aui-button.aui-button-primary.search-button').click();
