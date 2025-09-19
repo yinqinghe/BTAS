@@ -2193,6 +2193,9 @@ function AwsAlertHandler(...kwargs) {
                     });
                 } else {
                     let accessKeyId = aws?.userIdentity?.accessKeyId;
+                    if (accessKeyId) {
+                        accessKeyId=accessKeyId.slice(0, 5) + '*'.repeat(accessKeyId.length - 5)
+                    }
                     acc.push({
                         EventTime: aws?.eventTime,
                         EventName: aws?.eventName,
@@ -2200,7 +2203,7 @@ function AwsAlertHandler(...kwargs) {
                         ExternalIP: aws?.external_ip,
                         Domain: aws?.domain,
                         User: aws?.userIdentity?.arn,
-                        accessKeyId: accessKeyId.slice(0, 5) + '*'.repeat(accessKeyId.length - 5),
+                        accessKeyId: accessKeyId,
                         UserAgent: aws?.userAgent,
                         PrincipalId: aws?.userIdentity?.principalId,
                         Result: aws?.errorCode,
@@ -2267,7 +2270,7 @@ function AwsAlertHandler(...kwargs) {
 }
 
 function AzureAlertHandler(...kwargs) {
-    const { rawLog } = kwargs[0];
+    const { rawLog,summary } = kwargs[0];
 
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
@@ -2301,7 +2304,15 @@ function AzureAlertHandler(...kwargs) {
                     Action: azure['Action'],
                     ExtendedProperties: JSON.stringify(ExtendedProperties, null, 4),
                     ...entities,
-                    alerturi: eventhub['AlertUri']
+                    alerturi: eventhub['AlertUri'],
+                    timeStamp: eventhub['timeStamp'],
+                    clientIP: azure['clientIP'],
+                    instanceId: azure['instanceId'],
+                    requestUri: azure['requestUri'],
+                    requestQuery: azure['requestQuery'],
+                    userAgent: azure['userAgent'],
+                    httpStatus:azure['httpStatus'],
+                    originalHost:azure['originalHost']
                 });
             } catch (error) {
                 console.log(`Error: ${error}`);
@@ -2312,16 +2323,21 @@ function AzureAlertHandler(...kwargs) {
     }
 
     const alertInfo = parseLog(rawLog);
-
+    console.log('===', alertInfo);
     function generateDescription() {
         const alertDescriptions = [];
         for (const info of alertInfo) {
             let desc = `Observed ${info.summary}\n`;
+            if (!info.summary) {
+                desc = `Observed ${summary}\n`;
+            }
             Object.entries(info).forEach(([index, value]) => {
                 if (value !== undefined && value !== '' && index !== 'summary') {
                     if (index == 'StartTimeUtc') {
                         desc += `StartTimeUtc(<span class="red_highlight">GMT</span>): ${value.split('.')[0]}\n`;
-                    } else {
+                    } else if(index == 'timeStamp') {
+                        desc += `timeStamp(<span class="red_highlight">GMT</span>): ${value.split('+')[0]}\n`;
+                    }else {
                         desc += `${index}: ${value}\n`;
                     }
                 }
@@ -4473,6 +4489,7 @@ function MDE365AlertHandler(...kwargs) {
         }
     }
     function generateDescription_365() {
+        console.log('===alertInfo_365', alertInfo_365);
         for (const info of alertInfo_365) {
             let desc = '';
             if (LogSourceDomain == cachedMappingContent['kka']) {
