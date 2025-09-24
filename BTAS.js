@@ -1086,19 +1086,23 @@ function cortexAlertHandler(...kwargs) {
     function parseLog(cortex_log) {
         let alertInfo = [];
         let cortex_xdr;
-        if (rawLog[0] != '') {
-            rawLog.reduce((acc, log) => {
-                if (log.length == 0) {
-                    return acc;
+        try {
+            if (rawLog[0] != '') {
+                    rawLog.reduce((acc, log) => {
+                        if (log.length == 0) {
+                            return acc;
+                        }
+                        cortex_xdr = JSON.parse(log)['cortex_xdr'];
+                        const { case_id, alert_id } = JSON.parse(log)['cortex_xdr'];
+                        cortex_url.push({ case_id: case_id, alert_id: alert_id });
+                        process(cortex_xdr);
+                    }, []);
+                } else {
+                    cortex_xdr = JSON.parse(cortex_log)['data']['cortex_xdr'];
+                    process(cortex_xdr);
                 }
-                cortex_xdr = JSON.parse(log)['cortex_xdr'];
-                const { case_id, alert_id } = JSON.parse(log)['cortex_xdr'];
-                cortex_url.push({ case_id: case_id, alert_id: alert_id });
-                process(cortex_xdr);
-            }, []);
-        } else {
-            cortex_xdr = JSON.parse(cortex_log)['data']['cortex_xdr'];
-            process(cortex_xdr);
+        } catch (error) {
+            console.log(`Error: ${error.message}`);
         }
         console.log('===cortex_url', cortex_url);
 
@@ -1273,7 +1277,7 @@ function cortexAlertHandler(...kwargs) {
                 console.error(`Error: ${error.message}`);
             }
         }
-
+   
         return alertInfo;
     }
     const alertInfo = parseLog(rawLog_debug);
@@ -1614,7 +1618,12 @@ function WineventAlertHandler(...kwargs) {
     var raw_alert = 0;
     const num_alert = $('#customfield_10300-val').text().trim();
     const rawLog_debug = $('#field-customfield_10232 > div.twixi-wrap.verbose > div > div > div > pre').text();
-    let rawLog_debug_json = JSON.parse(rawLog_debug);
+    let rawLog_debug_json = '';
+    try {
+        rawLog_debug_json = JSON.parse(rawLog_debug);
+    } catch (error) {
+        console.error(`Error: ${error.message}`);
+    }
     let host_ip = rawLog_debug_json?.agent?.ip || "";
     let host_name = rawLog_debug_json?.agent?.name || "";
 
@@ -3024,13 +3033,14 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             DeviceProperties,
                             UserKey
                         } = json_alert['office_365'];
-
                         let devicename = '';
-                        DeviceProperties.forEach((item) => {
-                            if (item.Name === 'DisplayName') {
-                                devicename = item.Value;
-                            }
-                        });
+                        if (DeviceProperties) {
+                            DeviceProperties.forEach((item) => {
+                                if (item.Name === 'DisplayName') {
+                                    devicename = item.Value;
+                                }
+                            });
+                        }
                         alertExtraInfo = {
                             CreationEventTime: CreationTime ? CreationTime : undefined,
                             Operation: Operation ? Operation : undefined,
@@ -5112,7 +5122,10 @@ function SentinelOneAlertHandler(...kwargs) {
                     sha1: sentinel_one.threatInfo.sha1,
                     confidenceLevel: sentinel_one.threatInfo.filePath,
                     threatName: sentinel_one.threatInfo.threatName,
-                    processUser: sentinel_one.threatInfo.processUser
+                    processUser: sentinel_one.threatInfo.processUser,
+                    agentComputerName: sentinel_one.agentComputerName,
+                    agentLastLoggedInUpn: sentinel_one.agentLastLoggedInUpn,
+                    maliciousProcessArguments:sentinel_one.threatInfo.maliciousProcessArguments
                 });
                 raw_alert += 1;
             } catch (error) {
@@ -5136,7 +5149,7 @@ function SentinelOneAlertHandler(...kwargs) {
         for (const info of alertInfo) {
             let desc = `Observed ${summary.split(']')[1]}\n`;
             Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && value !== ' ' && index != 'Summary') {
+                if (value !== undefined && value !== ' ' && index != 'Summary' && value !== '') {
                     if (index == 'timestamp') {
                         desc += `timestamp(<span class="red_highlight">GMT</span>): ${value.split('.')[0]}Z\n`;
                     } else {
