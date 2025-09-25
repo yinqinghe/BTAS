@@ -3244,7 +3244,16 @@ function AlicloudAlertHandler(...kwargs) {
                             extend_content,
                             detail,
                             requestParameters,
-                            responseElements
+                            responseElements,
+                            src_ip,
+                            remote_addr,
+                            status,
+                            host,
+                            http_referer,
+                            http_user_agent,
+                            upstream_addr,
+                            request_path,
+                            request_method
                         } = json_alert['alicloud'];
                         let alertExtraInfo = {
                             createTime: time,
@@ -3258,7 +3267,16 @@ function AlicloudAlertHandler(...kwargs) {
                             intranet_ip: intranet_ip ? intranet_ip : undefined,
                             instance_id: instance_id ? instance_id : undefined,
                             extend_content: extend_content ? extend_content : undefined,
-                            responseElements: responseElements ? JSON.stringify(responseElements) : undefined
+                            responseElements: responseElements ? JSON.stringify(responseElements) : undefined,
+                            src_ip: src_ip ? src_ip : undefined,
+                            remote_addr: remote_addr ? remote_addr : undefined,
+                            status: status ? status : undefined,
+                            host: host ? host : undefined,
+                            http_referer: http_referer ? http_referer : undefined,
+                            http_user_agent: http_user_agent ? http_user_agent : undefined,
+                            upstream_addr: upstream_addr ? upstream_addr : undefined,
+                            request_path: request_path ? request_path : undefined,
+                            request_method: request_method ? request_method : undefined,
                         };
                         console.log('===', requestParameters, time);
 
@@ -3269,7 +3287,6 @@ function AlicloudAlertHandler(...kwargs) {
                         if (requestParameters != undefined) {
                             alertExtraInfo = Object.assign({}, alertExtraInfo, requestParameters);
                         }
-
                         console.log(alertExtraInfo);
                         acc.push({ alertExtraInfo });
                     } catch (error) {
@@ -3304,7 +3321,6 @@ function AlicloudAlertHandler(...kwargs) {
                     }
                 }
             }
-
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
