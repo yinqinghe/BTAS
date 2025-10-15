@@ -2396,7 +2396,8 @@ function paloaltoAlertHandler(...kwargs) {
                         'Source IP': logArray[7],
                         'Destination IP': logArray[8],
                         'Destination Port': logArray[25],
-                        'Destination Location': logArray[42] != 0 ? logArray[42] : logArray[39]
+                        'Destination Location': logArray[42] != 0 ? logArray[42] : logArray[39],
+                        'action': logArray[30],
                     });
                 }
                 if (logType == 'THREAT') {
@@ -2435,6 +2436,7 @@ Network Information:
     <li>Egress Interface: ${logArray[19]}</li></ul>
 Traffic Details:
     <ul><li>Protocol: ${logArray[29]}</li>
+    <li>action: ${logArray[30]}</li>
     <li>Application: ${logArray[14]}</li>
     <li>Direction: ${logArray[35]}</li>
     <li>Session ID: ${logArray[36]}</li></ul>
@@ -3795,7 +3797,11 @@ function SangforAlertHandler(...kwargs) {
                         'attack_ip': matches.attack_ip ? matches.attack_ip : undefined,
                         'event_evidence': matches.event_evidence ? matches.event_evidence : undefined,
                         'url': matches.url ? matches.url : undefined,
-                        'suggest': matches.suggest ? matches.suggest : undefined
+                        'suggest': matches.suggest ? matches.suggest : undefined,
+                        src: matches.src ? matches.src : undefined,
+                        dst: matches.dst ? matches.dst : undefined,
+                        msg: matches.msg ? matches.msg : undefined,
+                        'Recommand': matches.cs3 ? matches.cs3 : undefined,
                     });
                 }
             } catch (error) {
@@ -4301,10 +4307,6 @@ function MDE365AlertHandler(...kwargs) {
                                     }
                                 });
                                 alert['entities'].forEach(function (entity) {
-                                    if (entity.processCommandLine !== undefined) {
-                                        processCommandLine = entity.processCommandLine.replace(/\r\n\r\n+/g, '\n');
-                                        console.log(processCommandLine);
-                                    }
                                     if (entity['entityType'] == 'User' || entity['entityType'] == 'Mailbox') {
                                         if (!entities['user']) {
                                             entities['user'] = [];
@@ -4333,17 +4335,23 @@ function MDE365AlertHandler(...kwargs) {
                                         // if (processCommandLine == '') {
                                         //     return;
                                         // }
-                                        const fileEntry = {
+                                        let fileEntry = {
                                             File: `${entity['filePath']}\\\\${entity['fileName']}`,
                                             detectionStatus: entity['detectionStatus'],
-                                            cmd: processCommandLine
                                         };
-                                        if (processCommandLine.includes('EncodedCommand')) {
-                                            let cmd_length = processCommandLine.split(' ').length;
-                                            fileEntry['Decode_Cmd'] = atob(
-                                                processCommandLine.split(' ')[cmd_length - 1].replace(/['"]/g, '')
-                                            );
-                                        }
+                                        if (entity.processCommandLine && entity.processCommandLine !== undefined) {
+                                            processCommandLine = entity.processCommandLine.replace(/\r\n\r\n+/g, '\n');
+                                            fileEntry['cmd']=processCommandLine
+                                            console.log(processCommandLine);
+                                            if (processCommandLine.includes('EncodedCommand')) {
+                                                let cmd_length = processCommandLine.split(' ').length;
+                                                fileEntry['Decode_Cmd'] = atob(
+                                                    processCommandLine.split(' ')[cmd_length - 1].replace(/['"]/g, '')
+                                                );
+                                          }
+
+                                         }
+
                                         if (
                                             Object.keys(entity).includes('sha256') &&
                                             (WhiteFilehash(entity['sha256']) || WhiteFilehash(entity['sha1']))
