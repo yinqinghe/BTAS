@@ -2605,6 +2605,9 @@ function AzureGraphAlertHandler(...kwargs) {
                                     : undefined,
                                 activityDateTime: activityDateTime ? activityDateTime : undefined,
                                 activityDisplayName: activityDisplayName ? activityDisplayName : undefined,
+                                ipAddress: initiatedBy?.user?.ipAddress
+                                    ? initiatedBy?.user?.ipAddress
+                                    : undefined,
                                 result: result ? result : undefined
                             };
                             acc.push({ alertExtraInfo });
@@ -5000,6 +5003,7 @@ function WebAccesslogAlertHandler(...kwargs) {
                         path: path,
                         responseSize: parseInt(match[6], 10),
                         Source_IP: match[2],
+                        'user-agent':match[8],
                         statusCode: parseInt(match[5], 10)
                     });
                 } else {
