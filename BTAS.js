@@ -1088,19 +1088,19 @@ function cortexAlertHandler(...kwargs) {
         let cortex_xdr;
         try {
             if (rawLog[0] != '') {
-                    rawLog.reduce((acc, log) => {
-                        if (log.length == 0) {
-                            return acc;
-                        }
-                        cortex_xdr = JSON.parse(log)['cortex_xdr'];
-                        const { case_id, alert_id } = JSON.parse(log)['cortex_xdr'];
-                        cortex_url.push({ case_id: case_id, alert_id: alert_id });
-                        process(cortex_xdr);
-                    }, []);
-                } else {
-                    cortex_xdr = JSON.parse(cortex_log)['data']['cortex_xdr'];
+                rawLog.reduce((acc, log) => {
+                    if (log.length == 0) {
+                        return acc;
+                    }
+                    cortex_xdr = JSON.parse(log)['cortex_xdr'];
+                    const { case_id, alert_id } = JSON.parse(log)['cortex_xdr'];
+                    cortex_url.push({ case_id: case_id, alert_id: alert_id });
                     process(cortex_xdr);
-                }
+                }, []);
+            } else {
+                cortex_xdr = JSON.parse(cortex_log)['data']['cortex_xdr'];
+                process(cortex_xdr);
+            }
         } catch (error) {
             console.log(`Error: ${error.message}`);
         }
@@ -1277,7 +1277,7 @@ function cortexAlertHandler(...kwargs) {
                 console.error(`Error: ${error.message}`);
             }
         }
-   
+
         return alertInfo;
     }
     const alertInfo = parseLog(rawLog_debug);
@@ -1624,8 +1624,8 @@ function WineventAlertHandler(...kwargs) {
     } catch (error) {
         console.error(`Error: ${error.message}`);
     }
-    let host_ip = rawLog_debug_json?.agent?.ip || "";
-    let host_name = rawLog_debug_json?.agent?.name || "";
+    let host_ip = rawLog_debug_json?.agent?.ip || '';
+    let host_name = rawLog_debug_json?.agent?.name || '';
 
     summary = summary.replace(/[\[(].*?[\])]/g, '');
     function parseLog(rawLog) {
@@ -1781,7 +1781,7 @@ function FortigateAlertHandler(...kwargs) {
                 devname: devname,
                 user: user,
                 url: url,
-                filename:filename,
+                filename: filename,
                 action: action,
                 cfgattr: cfgattr,
                 msg: msg,
@@ -2203,7 +2203,7 @@ function AwsAlertHandler(...kwargs) {
                 } else {
                     let accessKeyId = aws?.userIdentity?.accessKeyId;
                     if (accessKeyId) {
-                        accessKeyId=accessKeyId.slice(0, 5) + '*'.repeat(accessKeyId.length - 5)
+                        accessKeyId = accessKeyId.slice(0, 5) + '*'.repeat(accessKeyId.length - 5);
                     }
                     acc.push({
                         EventTime: aws?.eventTime,
@@ -2279,7 +2279,7 @@ function AwsAlertHandler(...kwargs) {
 }
 
 function AzureAlertHandler(...kwargs) {
-    const { rawLog,summary } = kwargs[0];
+    const { rawLog, summary } = kwargs[0];
 
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
@@ -2320,8 +2320,8 @@ function AzureAlertHandler(...kwargs) {
                     requestUri: azure['requestUri'],
                     requestQuery: azure['requestQuery'],
                     userAgent: azure['userAgent'],
-                    httpStatus:azure['httpStatus'],
-                    originalHost:azure['originalHost']
+                    httpStatus: azure['httpStatus'],
+                    originalHost: azure['originalHost']
                 });
             } catch (error) {
                 console.log(`Error: ${error}`);
@@ -2344,9 +2344,9 @@ function AzureAlertHandler(...kwargs) {
                 if (value !== undefined && value !== '' && index !== 'summary') {
                     if (index == 'StartTimeUtc') {
                         desc += `StartTimeUtc(<span class="red_highlight">GMT</span>): ${value.split('.')[0]}\n`;
-                    } else if(index == 'timeStamp') {
+                    } else if (index == 'timeStamp') {
                         desc += `timeStamp(<span class="red_highlight">GMT</span>): ${value.split('+')[0]}\n`;
-                    }else {
+                    } else {
                         desc += `${index}: ${value}\n`;
                     }
                 }
@@ -2397,7 +2397,7 @@ function paloaltoAlertHandler(...kwargs) {
                         'Destination IP': logArray[8],
                         'Destination Port': logArray[25],
                         'Destination Location': logArray[42] != 0 ? logArray[42] : logArray[39],
-                        'action': logArray[30],
+                        'action': logArray[30]
                     });
                 }
                 if (logType == 'THREAT') {
@@ -2451,8 +2451,8 @@ Vulnerability Information:</br>
     <ul><li>Sender: ${logArray[50]}</li>
     <li>Target recipients: ${logArray[52]}</li>
     <li>Malicious link: ${logArray[31]}</li>
-    <li>Subject:${logArray[51]}</li></ul>`
-                        description+=email_info
+    <li>Subject:${logArray[51]}</li></ul>`;
+                        description += email_info;
                     }
                     raw_alert += 1;
                     acc.push(description);
@@ -2605,9 +2605,7 @@ function AzureGraphAlertHandler(...kwargs) {
                                     : undefined,
                                 activityDateTime: activityDateTime ? activityDateTime : undefined,
                                 activityDisplayName: activityDisplayName ? activityDisplayName : undefined,
-                                ipAddress: initiatedBy?.user?.ipAddress
-                                    ? initiatedBy?.user?.ipAddress
-                                    : undefined,
+                                ipAddress: initiatedBy?.user?.ipAddress ? initiatedBy?.user?.ipAddress : undefined,
                                 result: result ? result : undefined
                             };
                             acc.push({ alertExtraInfo });
@@ -3281,7 +3279,7 @@ function AlicloudAlertHandler(...kwargs) {
                             http_user_agent: http_user_agent ? http_user_agent : undefined,
                             upstream_addr: upstream_addr ? upstream_addr : undefined,
                             request_path: request_path ? request_path : undefined,
-                            request_method: request_method ? request_method : undefined,
+                            request_method: request_method ? request_method : undefined
                         };
                         console.log('===', requestParameters, time);
 
@@ -3649,7 +3647,7 @@ function SangforAlertHandler(...kwargs) {
                         subject: matches.subject ? matches.subject : undefined,
                         fileType: matches.fileType ? matches.fileType : undefined,
                         filePath: matches.filePath ? matches.filePath : undefined,
-                        request: matches.request ? matches.request : undefined,
+                        request: matches.request ? matches.request : undefined
                     };
                     data_json[matches.cs1Label] = matches.cs1 ? matches.cs1 : undefined;
                     data_json[matches.cs4Label] = matches.cs4 ? matches.cs4 : undefined;
@@ -3759,9 +3757,11 @@ function SangforAlertHandler(...kwargs) {
                         'dpt': matches.dpt ? matches.dpt : undefined,
                         'act': matches.act ? matches.act : undefined,
                         'request': matches.request ? matches.request : undefined,
-                        'requestClientApplication': matches.requestClientApplication ? matches.requestClientApplication : undefined,
+                        'requestClientApplication': matches.requestClientApplication
+                            ? matches.requestClientApplication
+                            : undefined,
                         'requestMethod': matches.requestMethod ? matches.requestMethod : undefined,
-                        'suer': matches.suer ? matches.suer : undefined,
+                        'suer': matches.suer ? matches.suer : undefined
                     };
                     data_json[matches.cs1Label] = matches.cs1 ? matches.cs1 : undefined;
                     data_json[matches.cs3Label] = matches.cs3 ? matches.cs3 : undefined;
@@ -3773,7 +3773,7 @@ function SangforAlertHandler(...kwargs) {
                         'fname': matches.fname ? matches.fname : undefined,
                         'msg': matches.msg ? matches.msg : undefined,
                         'shost': matches.shost ? matches.shost : undefined,
-                        'src': matches.src ? matches.src : undefined,
+                        'src': matches.src ? matches.src : undefined
                     };
                     data_json[matches.cs1Label] = matches.cs1 ? matches.cs1 : undefined;
                     data_json[matches.cn1Label] = matches.cn1 ? matches.cn1 : undefined;
@@ -3801,10 +3801,10 @@ function SangforAlertHandler(...kwargs) {
                         'event_evidence': matches.event_evidence ? matches.event_evidence : undefined,
                         'url': matches.url ? matches.url : undefined,
                         'suggest': matches.suggest ? matches.suggest : undefined,
-                        src: matches.src ? matches.src : undefined,
-                        dst: matches.dst ? matches.dst : undefined,
-                        msg: matches.msg ? matches.msg : undefined,
-                        'Recommand': matches.cs3 ? matches.cs3 : undefined,
+                        'src': matches.src ? matches.src : undefined,
+                        'dst': matches.dst ? matches.dst : undefined,
+                        'msg': matches.msg ? matches.msg : undefined,
+                        'Recommand': matches.cs3 ? matches.cs3 : undefined
                     });
                 }
             } catch (error) {
@@ -4340,20 +4340,19 @@ function MDE365AlertHandler(...kwargs) {
                                         // }
                                         let fileEntry = {
                                             File: `${entity['filePath']}\\\\${entity['fileName']}`,
-                                            detectionStatus: entity['detectionStatus'],
+                                            detectionStatus: entity['detectionStatus']
                                         };
                                         if (entity.processCommandLine && entity.processCommandLine !== undefined) {
                                             processCommandLine = entity.processCommandLine.replace(/\r\n\r\n+/g, '\n');
-                                            fileEntry['cmd']=processCommandLine
+                                            fileEntry['cmd'] = processCommandLine;
                                             console.log(processCommandLine);
                                             if (processCommandLine.includes('EncodedCommand')) {
                                                 let cmd_length = processCommandLine.split(' ').length;
                                                 fileEntry['Decode_Cmd'] = atob(
                                                     processCommandLine.split(' ')[cmd_length - 1].replace(/['"]/g, '')
                                                 );
-                                          }
-
-                                         }
+                                            }
+                                        }
 
                                         if (
                                             Object.keys(entity).includes('sha256') &&
@@ -4997,14 +4996,14 @@ function WebAccesslogAlertHandler(...kwargs) {
 
                     const [method, path, protocol] = match[4].split(' ');
                     acc.push({
-                        timestamp: match[3],
-                        clientIp: match[1],
-                        method: method,
-                        path: path,
-                        responseSize: parseInt(match[6], 10),
-                        Source_IP: match[2],
-                        'user-agent':match[8],
-                        statusCode: parseInt(match[5], 10)
+                        'timestamp': match[3],
+                        'clientIp': match[1],
+                        'method': method,
+                        'path': path,
+                        'responseSize': parseInt(match[6], 10),
+                        'Source_IP': match[2],
+                        'user-agent': match[8],
+                        'statusCode': parseInt(match[5], 10)
                     });
                 } else {
                     const regex1 =
@@ -5153,7 +5152,7 @@ function SentinelOneAlertHandler(...kwargs) {
                     processUser: sentinel_one.threatInfo.processUser,
                     agentComputerName: sentinel_one.agentComputerName,
                     agentLastLoggedInUpn: sentinel_one.agentLastLoggedInUpn,
-                    maliciousProcessArguments:sentinel_one.threatInfo.maliciousProcessArguments
+                    maliciousProcessArguments: sentinel_one.threatInfo.maliciousProcessArguments
                 });
                 raw_alert += 1;
             } catch (error) {
@@ -5400,25 +5399,26 @@ function NetsKopeAlertHandler(...kwargs) {
                 if (log.length == 0) {
                     return acc;
                 }
-                const regex = /"[^"]*"|\b(?:POST|GET|PUT|DELETE)\b|\b(?:https?|TLSv\d\.\d)\b|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b|\b\d{3}\b|[A-Z]{2}|\b(?:Block|No\sBlock|Allow)\b|(?:Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{2}:\d{2}:\d{2}/g;
+                const regex =
+                    /"[^"]*"|\b(?:POST|GET|PUT|DELETE)\b|\b(?:https?|TLSv\d\.\d)\b|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b|\b\d{3}\b|[A-Z]{2}|\b(?:Block|No\sBlock|Allow)\b|(?:Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{2}:\d{2}:\d{2}/g;
 
                 // const regex = /"[^"]*"|\b(?:POST|GET|PUT|DELETE)\b|\b(?:https?|TLSv\d\.\d)\b|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b|\b\d{3}\b|[A-Z]{2}|(?:Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{2}:\d{2}:\d{2}/g;
                 const blocks = log.match(regex);
                 console.log(blocks);
                 let result = {
-                    'createtime': blocks[0],
-                    'source_ip': blocks[1],
-                    'des_ip': blocks[32],
-                    'User': blocks[2],
-                    'content_type': blocks[6],
-                    'status_code': blocks[7],
-                    'Geo_location': blocks[11],
-                    'host': blocks[46],
-                    'sni': blocks[33],
-                    'ua': blocks[5],
-                    'alert_name': blocks[29],
+                    createtime: blocks[0],
+                    source_ip: blocks[1],
+                    des_ip: blocks[32],
+                    User: blocks[2],
+                    content_type: blocks[6],
+                    status_code: blocks[7],
+                    Geo_location: blocks[11],
+                    host: blocks[46],
+                    sni: blocks[33],
+                    ua: blocks[5],
+                    alert_name: blocks[29]
                     // 'action': blocks[28],
-                }
+                };
                 console.log('===', result);
                 acc.push(result);
                 raw_alert += 1;
@@ -5457,7 +5457,6 @@ function NetsKopeAlertHandler(...kwargs) {
     }
     addButton('generateDescription', 'Description', generateDescription);
 }
-
 
 function NoLogAlertHandler(...kwargs) {
     const { summary } = kwargs[0];
@@ -5773,7 +5772,11 @@ function RealTimeMonitoring() {
     ) {
         console.log('#### Code includes filter run ####');
         const NotifyControls = createNotifyControls();
-        if (window.location.href.includes('filter=15200') || window.location.href.includes('filter=26405') || window.location.href.includes('filter=54400')) {
+        if (
+            window.location.href.includes('filter=15200') ||
+            window.location.href.includes('filter=26405') ||
+            window.location.href.includes('filter=54400')
+        ) {
             setInterval(() => {
                 notifyKey = [];
                 $('.aui-button.aui-button-primary.search-button').click();
@@ -5868,7 +5871,7 @@ function RealTimeMonitoring() {
                 'nnt_cef': SangforAlertHandler,
                 'netskope': NetsKopeAlertHandler,
                 'trendmicro_cef': SangforAlertHandler,
-                'forcepoint_cef': SangforAlertHandler,
+                'forcepoint_cef': SangforAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
