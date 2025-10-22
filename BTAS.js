@@ -5755,6 +5755,40 @@ function WhiteFilehash(filehash) {
     }
 }
 
+function TicketProcessingStandards(...kwargs) {
+    const { LogSourceDomain, summary } = kwargs[0];
+    function showPopup(msg) {
+        $('.popup-bg').remove(); // 移除旧弹窗
+        const popup = $(`
+            <div class="popup-bg" style="
+            position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+            background:rgba(0,0,0,0.5);z-index:9999;">
+            <div style="
+                background:#fff;padding:40px 50px;border-radius:10px;
+                text-align:center;font-size:20px;box-shadow:0 0 20px rgba(0,0,0,0.3);">
+                <div>${msg}</div>
+                <div style="margin-top:25px;">
+                <button class="ok" style="font-size:18px;padding:8px 20px;margin:0 10px;">确定</button>
+                <button class="cancel" style="font-size:18px;padding:8px 20px;margin:0 10px;">取消</button>
+                </div>
+            </div>
+            </div>
+        `);
+        $('body').append(popup);
+        popup.find('.ok, .cancel').on('click', () => popup.remove());
+        popup.on('click', (e) => {
+            if (e.target === popup[0]) popup.remove();
+        });
+    }
+    let msg =
+        '<b style="color:red;">WatchTowr Informational Severity Point Of Interest 告警处理(重点注意！！！)<br>1.需要对IP进行解析是否与(static.chowtaifook.com/dp.chowtaifooktmark.com)相关,,若相关则无需升级给客户,ref:DEV-14978 <br>2.需要访问里面的URL，如果网站的页面是DP或static/Matomo，请不要升级，直接关闭即可 ref:MSS-1933754<br>3.注意评论里的aireflow评论</b>';
+    if (summary.includes('Point Of Interest') && LogSourceDomain.includes('ctfj')) {
+        $('#edit-issue').on('click', () => {
+            showPopup(msg);
+        });
+    }
+}
+
 function RealTimeMonitoring() {
     const url = 'https://172.18.4.200/api/7vVKD9hF/message/';
     const apiKey = 'Tnznjha3yhJgA7YG';
@@ -5931,6 +5965,7 @@ function RealTimeMonitoring() {
             if (Log_Domain_handler) {
                 Log_Domain_handler({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: summary });
             }
+            TicketProcessingStandards({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: summary });
             if (window.location.href.includes('MSS') || window.location.href.includes('OPS')) {
                 addButton('towhitelist', 'WhiteList', ToWhitelist);
             }
