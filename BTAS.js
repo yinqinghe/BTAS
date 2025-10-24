@@ -435,6 +435,7 @@ function QuickReply() {
        <aui-item-radio interactive>Close ticket</aui-item-radio>
         <aui-item-radio interactive>Monitor ticket</aui-item-radio>
         <aui-item-radio interactive>Waiting ticket</aui-item-radio>
+        <aui-item-radio interactive>Ask close ticket</aui-item-radio>
         <aui-item-radio interactive>Waiting Full Scan</aui-item-radio>
         <aui-item-radio interactive>Ask for Whitelist</aui-item-radio>
         <aui-item-radio interactive>Whitelist Done</aui-item-radio>
@@ -453,9 +454,10 @@ function QuickReply() {
 
     const commentBarSection = document.querySelector('aui-section#reply');
     const replyComment = {
-        'Close ticket': 'Dear Customer,<br>Thanks for your reply, we will close this ticket.<br>Best Regards.',
+        'Close ticket111': 'Dear Customer,<br>Thanks for your reply, we will close this ticket.<br>Best Regards.',
         'Monitor ticket': 'Dear Customer,<br>Thanks for your reply, we will keep monitor.<br>Best Regards.',
         'Waiting ticket': 'Dear Customer,<br>Thanks, we look forward to hearing from you.',
+        'Ask close ticket': 'Dear Customer,<br>Could we close this ticket.Thanks',
         'Waiting Full Scan':
             'Dear Customer,<br>Full scan have been triggered , if suspicious files detected new MDE alert/ticket will be created.',
         'Ask for Whitelist':
