@@ -454,7 +454,7 @@ function QuickReply() {
 
     const commentBarSection = document.querySelector('aui-section#reply');
     const replyComment = {
-        'Close ticket111': 'Dear Customer,<br>Thanks for your reply, we will close this ticket.<br>Best Regards.',
+        'Close ticket': 'Dear Customer,<br>Thanks for your reply, we will close this ticket.<br>Best Regards.',
         'Monitor ticket': 'Dear Customer,<br>Thanks for your reply, we will keep monitor.<br>Best Regards.',
         'Waiting ticket': 'Dear Customer,<br>Thanks, we look forward to hearing from you.',
         'Ask close ticket': 'Dear Customer,<br>Could we close this ticket.Thanks',
