@@ -2039,8 +2039,12 @@ function SpemAlertHandler(...kwargs) {
         let logObject = {};
         const alertInfo = rawLog.reduce((acc, log) => {
             try {
+                if (log.length == 0) {
+                    return acc;
+                }
                 logArray = log.split(',');
                 logArray[10] = 'Action:' + logArray[10];
+                console.log('===', logArray);
                 for (const index of logArray) {
                     const [key, value] = index.split(/:(.+)/, 2);
                     logObject[key] = value;
@@ -4917,8 +4921,16 @@ function FireeyeAlertHandler(...kwargs) {
 }
 
 function WebAccesslogAlertHandler(...kwargs) {
-    var { summary, rawLog, LogSourceDomain } = kwargs[0];
+    var { summary, rawLog, DecoderName } = kwargs[0];
     var raw_alert = 0;
+    function escapeJsString(str) {
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;');
+    }
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
             try {
@@ -4926,6 +4938,7 @@ function WebAccesslogAlertHandler(...kwargs) {
                     return acc;
                 }
                 console.log('===', log);
+
                 if (
                     !summary.toLowerCase().includes('higher than allowed on most browsers. possible attack.') &&
                     !log.includes('DEBUG:')
@@ -4947,7 +4960,6 @@ function WebAccesslogAlertHandler(...kwargs) {
                     console.log(matches_);
                     let logArray = log.split(' ').filter((item) => item !== ''); //Remove extra whitespace from the string
                     console.log(logArray);
-                    console.log('===', logArray[8]);
                     if (logArray[8].includes(':')) {
                         const regex =
                             /(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(\w+)\s+(\S+)\s+(\S+)\s+(\S+:\d+)\s+-\s+\[([^\]]+)\]\s+"(GET|POST)\s+(.+?)\s+HTTP\/1\.1"\s+(\d{3})\s+(\d+)\s+"([^"]*)"\s+"([^"]+)"/;
@@ -4970,36 +4982,48 @@ function WebAccesslogAlertHandler(...kwargs) {
                             });
                         }
                     } else {
-                        acc.push({
-                            'Event time': logArray.slice(3, 5).join(' '),
-                            'Source_IP': logArray[0] ? logArray[0] : undefined,
-                            'URL': matches_[0] ? matches_[0] : undefined,
-                            'User-Agent': matches_[2] ? matches_[2] : undefined,
-                            'upstream_status': logArray[8] ? logArray[8] : undefined,
-                            'upstream_addr': matches.upstream_addr ? matches.upstream_addr : undefined,
-                            'sn': matches.sn ? matches.sn : undefined,
-                            'http_referrer': matches.http_referrer ? matches.http_referrer : undefined,
-                            'http_cookie': matches.http_cookie ? matches.http_cookie : undefined,
-                            'location': matches.location ? matches.location : undefined
-                        });
+                        if (DecoderName == 'web-accesslog-iis-default') {
+                            acc.push({
+                                'Event time': logArray.slice(0, 2).join(' '),
+                                'Source_IP': logArray[2] ? logArray[2] : undefined,
+                                'URL': logArray[4] ? logArray[4] : undefined,
+                                // 'payload': logArray[5] ? escapeJsString(logArray[5]) : undefined,
+                                'decode_payload': logArray[5]
+                                    ? escapeJsString(decodeURIComponent(logArray[5].replace(/\+/g, ' ')))
+                                    : undefined,
+                                'ServerIP': logArray[8] ? logArray[8] : undefined,
+                                'User-Agent': logArray[9] ? logArray[9] : undefined,
+                                'upstream_status': logArray[11] ? logArray[11] : undefined
+                            });
+                        } else {
+                            acc.push({
+                                'Event time': logArray.slice(3, 5).join(' '),
+                                'Source_IP': logArray[0] ? logArray[0] : undefined,
+                                'URL': matches_[0] ? matches_[0] : undefined,
+                                'User-Agent': matches_[2] ? matches_[2] : undefined,
+                                'upstream_status': logArray[8] ? logArray[8] : undefined,
+                                'upstream_addr': matches.upstream_addr ? matches.upstream_addr : undefined,
+                                'sn': matches.sn ? matches.sn : undefined,
+                                'http_referrer': matches.http_referrer ? matches.http_referrer : undefined,
+                                'http_cookie': matches.http_cookie ? matches.http_cookie : undefined,
+                                'location': matches.location ? matches.location : undefined
+                            });
+                        }
                     }
                 } else if (log.includes('DEBUG:')) {
                     const logRegex = /(\S+)\s+(\S+)\s+-\s+-\s+\[(.*?)\]\s+"(.*?)"\s+(\d+)\s+(\d+)\s+"(.*?)"\s+"(.*?)"/;
                     const match = log.match(logRegex);
-
                     if (!match) {
                         console.error('日志格式不匹配');
                         return null;
                     }
-
                     console.log('===', match);
-
                     const [method, path, protocol] = match[4].split(' ');
                     acc.push({
                         'timestamp': match[3],
                         'clientIp': match[1],
                         'method': method,
-                        'path': path,
+                        'path': decodeURIComponent(path.replace(/\+/g, ' ')),
                         'responseSize': parseInt(match[6], 10),
                         'Source_IP': match[2],
                         'user-agent': match[8],
@@ -5905,7 +5929,8 @@ function RealTimeMonitoring() {
                 'nnt_cef': SangforAlertHandler,
                 'netskope': NetsKopeAlertHandler,
                 'trendmicro_cef': SangforAlertHandler,
-                'forcepoint_cef': SangforAlertHandler
+                'forcepoint_cef': SangforAlertHandler,
+                'web-accesslog-iis-default': WebAccesslogAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
@@ -5942,7 +5967,8 @@ function RealTimeMonitoring() {
                 'multiple sms request for same source ip': AwsAlertHandler,
                 'malicious email campaign detected (>20)': JsonAlertHandler,
                 'azure same user login failed multiple times': Risky_Countries_AlertHandler,
-                'no log received alert': NoLogAlertHandler
+                'no log received alert': NoLogAlertHandler,
+                'outgoing ssh/rdp protocol used': FortigateAlertHandler
             };
             const Summary = $('#summary-val').text().trim();
             let No_Decoder_handler = null;
