@@ -3712,6 +3712,7 @@ function SangforAlertHandler(...kwargs) {
                         cp_severity: matches.cp_severity ? matches.cp_severity : undefined,
                         src: matches.src ? matches.src : undefined,
                         dst: matches.dst ? matches.dst : undefined,
+                        act: matches.act ? matches.act : undefined,
                         origin: matches.origin ? matches.origin : undefined
                     };
                     data_json[matches.cs2Label] = matches.cs2 ? matches.cs2 : undefined;
@@ -5484,6 +5485,96 @@ function NetsKopeAlertHandler(...kwargs) {
     addButton('generateDescription', 'Description', generateDescription);
 }
 
+function OracleAlertHandler(...kwargs) {
+    const { rawLog, summary } = kwargs[0];
+    var raw_alert = 0;
+    function parseLog(rawLog) {
+        const alertInfo = rawLog.reduce((acc, log) => {
+            try {
+                if (log.length == 0) {
+                    return acc;
+                }
+                let cloudguard = JSON.parse(log)['oci-cloudguard'];
+                let cloud = JSON.parse(log)['oracle-cloud'];
+                if (cloud) {
+                    let aEM = JSON.parse(
+                        cloud['data']['logContent']['data']['additionalDetails']['auditEventMapValue']
+                    );
+                    console.log('===', aEM);
+                    let result = {
+                        timestamp: aEM.timestamp ? aEM.timestamp.split('.')[0] : undefined,
+                        hostName: aEM.hostName ? aEM.hostName : undefined,
+                        hostIp: aEM.hostIp ? aEM.hostIp : undefined,
+                        actorName: aEM.actorName ? aEM.actorName : undefined,
+                        eventId: aEM.eventId ? aEM.eventId : undefined,
+                        clientIp: aEM.clientIp ? aEM.clientIp : undefined,
+                        httpRequestType: aEM.httpRequestType ? aEM.httpRequestType : undefined,
+                        httpResponseStatus: aEM.httpResponseStatus ? aEM.httpResponseStatus : undefined,
+                        userAgent: aEM.userAgent ? aEM.userAgent : undefined
+                    };
+                    if (aEM.adminResourceName) {
+                        result[aEM.adminResourceType] = aEM.adminResourceName;
+                    }
+                    if (aEM.adminRefResourceName) {
+                        result[aEM.adminRefResourceType] = aEM.adminRefResourceName;
+                    }
+                    acc.push(result);
+                }
+                if (cloudguard) {
+                    console.log('===', log, cloudguard);
+                    let result = {
+                        compartment_id: cloudguard.compartment_id ? cloudguard.compartment_id : undefined,
+                        detector_rule_id: cloudguard.detector_rule_id ? cloudguard.detector_rule_id : undefined,
+                        id: cloudguard.id ? cloudguard.id : undefined,
+                        regions: cloudguard.regions ? cloudguard.regions : undefined,
+                        resource_id: cloudguard.resource_id ? cloudguard.resource_id : undefined,
+                        risk_level: cloudguard.risk_level ? cloudguard.risk_level : undefined,
+                        target_id: cloudguard.target_id ? cloudguard.target_id : undefined,
+                        time_first_detected: cloudguard.time_first_detected
+                            ? cloudguard.time_first_detected.split('.')[0]
+                            : undefined
+                    };
+                    result[cloudguard['resource_type']] = cloudguard['resource_name'];
+                    acc.push(result);
+                }
+                raw_alert += 1;
+            } catch (error) {
+                console.log(`Error: ${error}`);
+            }
+            return acc;
+        }, []);
+        return alertInfo;
+    }
+
+    const alertInfo = parseLog(rawLog);
+    console.log('===', alertInfo);
+    const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
+    function generateDescription() {
+        const alertDescriptions = [];
+        for (const info of alertInfo) {
+            let desc = `Observed ${summary.split(']').at(-1)}\n`;
+            Object.entries(info).forEach(([index, value]) => {
+                if (value !== undefined && value !== ' ' && index != 'Summary') {
+                    if (index == 'time') {
+                        desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
+                    } else {
+                        desc += `${index}: ${value}\n`;
+                    }
+                }
+            });
+            alertDescriptions.push(desc);
+        }
+        const alertMsg = [...new Set(alertDescriptions)].join('\n');
+        showDialog(alertMsg);
+    }
+    addButton('generateDescription', 'Description', generateDescription);
+}
+
 function NoLogAlertHandler(...kwargs) {
     const { summary } = kwargs[0];
     function generateDescription() {
@@ -5932,7 +6023,8 @@ function RealTimeMonitoring() {
                 'netskope': NetsKopeAlertHandler,
                 'trendmicro_cef': SangforAlertHandler,
                 'forcepoint_cef': SangforAlertHandler,
-                'web-accesslog-iis-default': WebAccesslogAlertHandler
+                'web-accesslog-iis-default': WebAccesslogAlertHandler,
+                'oracle-json': OracleAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
@@ -6110,7 +6202,6 @@ function RealTimeMonitoring() {
 (function () {
     ('use strict');
     RealTimeMonitoring();
-
     AJS.whenIType('zv').execute(function () {
         document.getElementById('opsbar-transitions_more').click();
         const interval = setInterval(() => {
