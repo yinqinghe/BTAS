@@ -1958,29 +1958,40 @@ function CSAlertHandler(...kwargs) {
 }
 
 function SophosAlertHandler(...kwargs) {
-    let { rawLog } = kwargs[0];
+    let { rawLog, summary } = kwargs[0];
     var raw_alert = 0;
     const num_alert = $('#customfield_10300-val').text().trim();
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
             try {
-                log.replace(/[\[(].*?[\])]/g, '');
+                if (log.length == 0) {
+                    return acc;
+                }
                 const { sophos, logsource } = JSON.parse(log);
                 raw_alert += 1;
-                const summary = sophos.name;
-                const createtime = sophos.rt.split('.')[0] + 'Z';
-                const alertHost = sophos.dhost;
-                const alertUser = sophos.suser;
-                const alertID = sophos.id;
-                const alertIP = sophos?.source_info?.ip || sophos?.data?.source_info?.ip || '';
-                const alertExtraInfo = {
-                    'Sha256': sophos.appSha256,
+                let hmpa = sophos?.data?.hmpa_exploit;
+
+                let result = {
+                    'createtime': sophos.rt.split('.')[0] + 'Z',
+                    'Host': sophos.dhost,
+                    'Host_ip': sophos?.source_info?.ip || sophos?.data?.source_info?.ip || '',
+                    'User': sophos.suser,
+                    'alertID': sophos.id,
+                    'logsource': logsource,
+                    'description': sophos.name,
+                    'threat_status': sophos?.data?.threat_status ? sophos.data.threat_status : undefined,
+                    'SHA256': sophos.appSha256,
                     'Filename': sophos?.data?.fileName ? sophos.data.fileName : undefined,
                     'Processname': sophos?.data?.processName ? sophos.data.processName : undefined,
                     'Process': sophos?.data?.process ? sophos.data.process : undefined,
                     'Clean Up Result': sophos?.core_remedy_items?.items[0]?.result
                 };
-                acc.push({ summary, createtime, alertHost, alertIP, alertUser, alertID, logsource, alertExtraInfo });
+                if (hmpa) {
+                    let details = hmpa.details.replace(/\n\n/g, '\n');
+                    console.log('===', details);
+                    result['Details'] = '\n###' + details + '###';
+                }
+                acc.push(result);
             } catch (error) {
                 console.log(`Error: ${error.message}`);
             }
@@ -1996,19 +2007,18 @@ function SophosAlertHandler(...kwargs) {
     }
     function generateDescription() {
         const alertDescriptions = [];
-
         for (const info of alertInfo) {
-            let desc = `Observed ${info.summary}\nHost: ${info.alertHost} IP: ${info.alertIP || 'N/A'}\nUser: ${
-                info.alertUser
-            }\ncreatetime:(<span class="red_highlight">GMT</span>)${info.createtime}\n`;
-            for (const key in info.alertExtraInfo) {
-                if (Object.hasOwnProperty.call(info.alertExtraInfo, key)) {
-                    const value = info.alertExtraInfo[key];
-                    if (value !== undefined) {
-                        desc += `${key}: ${value}\n`;
+            let desc = `Observed ${summary.split(']').at(-1)}\n`;
+            let exclude = ['logsource', 'alertID', 'alertExtraInfo'];
+            Object.entries(info).forEach(([index, value]) => {
+                if (value !== undefined && value !== ' ' && !exclude.includes(index)) {
+                    if (index == 'createtime') {
+                        desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
+                    } else {
+                        desc += `${index}: ${value}\n`;
                     }
                 }
-            }
+            });
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -2018,9 +2028,9 @@ function SophosAlertHandler(...kwargs) {
     function openSophos() {
         let searchID = '';
         for (const info of alertInfo) {
-            const { alertHost, alertID, logsource } = info;
-            if (alertID || alertHost) {
-                searchID += `<strong>[${logsource}] ${alertHost}</strong>:<br>${alertID}<br><br>`;
+            const { Host, alertID, logsource } = info;
+            if (alertID || Host) {
+                searchID += `<strong>[${logsource}] ${Host}</strong>:<br>${alertID}<br><br>`;
             }
         }
         showFlag('info', 'Host and Alert ID', `${searchID}`, 'manual');
@@ -5530,7 +5540,7 @@ function OracleAlertHandler(...kwargs) {
                         resource_id: cloudguard.resource_id ? cloudguard.resource_id : undefined,
                         risk_level: cloudguard.risk_level ? cloudguard.risk_level : undefined,
                         target_id: cloudguard.target_id ? cloudguard.target_id : undefined,
-                        time_first_detected: cloudguard.time_first_detected
+                        timestamp: cloudguard.time_first_detected
                             ? cloudguard.time_first_detected.split('.')[0]
                             : undefined
                     };
@@ -5560,7 +5570,64 @@ function OracleAlertHandler(...kwargs) {
             let desc = `Observed ${summary.split(']').at(-1)}\n`;
             Object.entries(info).forEach(([index, value]) => {
                 if (value !== undefined && value !== ' ' && index != 'Summary') {
-                    if (index == 'time') {
+                    if (index == 'timestamp') {
+                        desc += `timestamp(<span class="red_highlight">GMT</span>): ${value}\n`;
+                    } else {
+                        desc += `${index}: ${value}\n`;
+                    }
+                }
+            });
+            alertDescriptions.push(desc);
+        }
+        const alertMsg = [...new Set(alertDescriptions)].join('\n');
+        showDialog(alertMsg);
+    }
+    addButton('generateDescription', 'Description', generateDescription);
+}
+
+function GoogleAlertHandler(...kwargs) {
+    const { rawLog, summary } = kwargs[0];
+    var raw_alert = 0;
+    function parseLog(rawLog) {
+        const alertInfo = rawLog.reduce((acc, log) => {
+            try {
+                if (log.length == 0) {
+                    return acc;
+                }
+                let alert = JSON.parse(log)['alerts'];
+                let data = alert['data']['ruleViolationInfo'];
+                console.log('===', alert);
+                let result = {
+                    createtime: alert.createTime ? alert.createTime.split('.')[0] : undefined,
+                    trigger: data.trigger ? data.trigger : undefined,
+                    dataSource: data.dataSource ? data.dataSource : undefined,
+                    recipients: data.recipients ? JSON.stringify(data.recipients) : undefined,
+                    resourceInfo: data.resourceInfo ? JSON.stringify(data.resourceInfo) : undefined,
+                    securityLink: alert.securityInvestigationToolLink ? alert.securityInvestigationToolLink : undefined
+                };
+                acc.push(result);
+                raw_alert += 1;
+            } catch (error) {
+                console.log(`Error: ${error}`);
+            }
+            return acc;
+        }, []);
+        return alertInfo;
+    }
+    const alertInfo = parseLog(rawLog);
+    const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
+    function generateDescription() {
+        const alertDescriptions = [];
+        for (const info of alertInfo) {
+            let desc = `Observed ${summary.split(']').at(-1)}\n`;
+            Object.entries(info).forEach(([index, value]) => {
+                if (value !== undefined && value !== ' ' && index != 'Summary') {
+                    if (index == 'createtime') {
                         desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
                     } else {
                         desc += `${index}: ${value}\n`;
@@ -6024,7 +6091,8 @@ function RealTimeMonitoring() {
                 'trendmicro_cef': SangforAlertHandler,
                 'forcepoint_cef': SangforAlertHandler,
                 'web-accesslog-iis-default': WebAccesslogAlertHandler,
-                'oracle-json': OracleAlertHandler
+                'oracle-json': OracleAlertHandler,
+                'google-api-json': GoogleAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
