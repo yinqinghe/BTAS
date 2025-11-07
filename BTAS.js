@@ -1895,6 +1895,7 @@ function CSAlertHandler(...kwargs) {
                     const cef_log_header = cef_log.slice(1, 7);
                     // Parsing CEF Extends
                     const cef_log_extends = cefToJson(cef_log[7]);
+                    console.log('===', cef_log_extends);
                     raw_alert += 1;
                     acc.push({
                         CreateTime: cef_log[0].split(' localhost ')[0],
@@ -2463,7 +2464,7 @@ Vulnerability Information:</br>
     <li>Malware Potential:${malware_potential}</li></ul>`;
                     if (logArray[32].includes('Email Link')) {
                         let email_info = `
-                        Email Link Information:</br>
+Email Link Information:</br>
     <ul><li>Sender: ${logArray[50]}</li>
     <li>Target recipients: ${logArray[52]}</li>
     <li>Malicious link: ${logArray[31]}</li>
@@ -5642,6 +5643,146 @@ function GoogleAlertHandler(...kwargs) {
     addButton('generateDescription', 'Description', generateDescription);
 }
 
+function WatchTowrAlertHandler(...kwargs) {
+    const { rawLog, summary } = kwargs[0];
+    var raw_alert = 0;
+    function escapeJsString(str) {
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;');
+    }
+    function parseLog(rawLog) {
+        const alertInfo = rawLog.reduce((acc, log) => {
+            try {
+                if (log.length == 0) {
+                    return acc;
+                }
+                let watchtowr = JSON.parse(log)['watchtowr'];
+                let wt_poi = JSON.parse(log)['wt_poi'];
+                let wt_hunt = JSON.parse(log)['wt_hunt'];
+
+                let result = {};
+                if (watchtowr) {
+                    result['createtime'] = watchtowr['created_at'].split('.')[0] + 'Z';
+                    result['title'] = watchtowr['title'];
+                    result['impact'] = watchtowr['impact'];
+                    result['evidence'] = escapeJsString(watchtowr['evidence']);
+                    result['recommendation'] = watchtowr['recommendation'];
+                    result['references'] = watchtowr['references'];
+                }
+                if (wt_poi) {
+                    result['createtime'] = wt_poi['discoveryDate'];
+                    result['name'] = wt_poi['name'];
+                    result['type'] = wt_poi['type'];
+                    result['url'] = wt_poi['url'];
+                    result[wt_poi['assetType']] = wt_poi['assetName'];
+                }
+                if (wt_hunt) {
+                    result['createtime'] = wt_hunt['created_at'].split('.')[0] + 'Z';
+                    result['total_findings'] = wt_hunt['total_findings'];
+                    result['hunt_request_type'] = wt_hunt['hunt_request_type'];
+                    result['description'] = wt_hunt['description'];
+                    result['hypothesis'] = wt_hunt['hypothesis'];
+                    result['status'] = wt_hunt['status'];
+                }
+                acc.push(result);
+                raw_alert += 1;
+            } catch (error) {
+                console.log(`Error: ${error}`);
+            }
+            return acc;
+        }, []);
+        return alertInfo;
+    }
+    const alertInfo = parseLog(rawLog);
+    const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
+    function generateDescription() {
+        const alertDescriptions = [];
+        for (const info of alertInfo) {
+            let desc = `Observed ${summary.split(']').at(-1)}\n`;
+            Object.entries(info).forEach(([index, value]) => {
+                if (value !== undefined && value !== ' ' && index != 'Summary') {
+                    if (index == 'createtime') {
+                        desc += `<strong>createtime(<span class="red_highlight">GMT</span>):</strong> ${value}\n`;
+                    } else {
+                        desc += `<strong>${index}:</strong> ${value}\n`;
+                    }
+                }
+            });
+            alertDescriptions.push(desc);
+        }
+        const alertMsg = [...new Set(alertDescriptions)].join('\n');
+        showDialog(alertMsg);
+    }
+    addButton('generateDescription', 'Description', generateDescription);
+}
+
+function GemsAlertHandler(...kwargs) {
+    const { rawLog, summary } = kwargs[0];
+    var raw_alert = 0;
+    function parseLog(rawLog) {
+        const alertInfo = rawLog.reduce((acc, log) => {
+            try {
+                if (log.length == 0) {
+                    return acc;
+                }
+                let gems = JSON.parse(log)['gems2'];
+
+                let result = {};
+                if (gems['log_type'] == 'authentication') {
+                    result['createtime'] = gems['timestamp'].split('.')[0] + 'Z';
+                    result['eventType'] = gems['eventType'];
+                    result['eventStatus'] = gems['eventStatus'];
+                    result['userId'] = gems['userId'];
+                    result['ipAddress'] = gems['ipAddress'];
+                    result['deviceId'] = gems['deviceId'];
+                }
+
+                acc.push(result);
+                raw_alert += 1;
+            } catch (error) {
+                console.log(`Error: ${error}`);
+            }
+            return acc;
+        }, []);
+        return alertInfo;
+    }
+    const alertInfo = parseLog(rawLog);
+    const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
+    function generateDescription() {
+        const alertDescriptions = [];
+        for (const info of alertInfo) {
+            let desc = `Observed ${summary.split(']').at(-1)}\n`;
+            Object.entries(info).forEach(([index, value]) => {
+                if (value !== undefined && value !== ' ' && index != 'Summary') {
+                    if (index == 'createtime') {
+                        desc += `<strong>createtime(<span class="red_highlight">GMT</span>):</strong> ${value}\n`;
+                    } else {
+                        desc += `<strong>${index}:</strong> ${value}\n`;
+                    }
+                }
+            });
+            alertDescriptions.push(desc);
+        }
+        const alertMsg = [...new Set(alertDescriptions)].join('\n');
+        showDialog(alertMsg);
+    }
+    addButton('generateDescription', 'Description', generateDescription);
+}
+
 function NoLogAlertHandler(...kwargs) {
     const { summary } = kwargs[0];
     function generateDescription() {
@@ -5837,11 +5978,13 @@ function MonitorDev() {
             if (element) {
                 let summary = 'Whitelist ' + white['summary'].replace('Wazuh', white['LogSourceDomain']);
                 iframeDocument.getElementById('summary').value = summary;
-                iframeDocument.getElementById('s2id_labels').innerHTML =
-                    `<ul class="select2-choices">  <li class="select2-search-choice">    <div>` +
-                    white['LogSourceDomain'] +
-                    `</div>    <a href="#" class="select2-search-choice-close" tabindex="-1"></a></li><li class="select2-search-field">    <input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="select2-input" id="s2id_autogen1" style="width: 10px;">  </li></ul>`;
-                iframeDocument.getElementById('labels').value = white['LogSourceDomain'];
+                if (white['LogSourceDomain'] != '') {
+                    iframeDocument.getElementById('s2id_labels').innerHTML =
+                        `<ul class="select2-choices">  <li class="select2-search-choice">    <div>` +
+                        white['LogSourceDomain'] +
+                        `</div>    <a href="#" class="select2-search-choice-close" tabindex="-1"></a></li><li class="select2-search-field">    <input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="select2-input" id="s2id_autogen1" style="width: 10px;">  </li></ul>`;
+                    iframeDocument.getElementById('labels').value = white['LogSourceDomain'];
+                }
                 iframeDocument.getElementById('customfield_14601').value = formatDate();
                 iframeDocument.getElementById('customfield_14600').value = formatDate();
                 iframeDocument.getElementById('customfield_14610').value = 'Yes';
@@ -6092,7 +6235,8 @@ function RealTimeMonitoring() {
                 'forcepoint_cef': SangforAlertHandler,
                 'web-accesslog-iis-default': WebAccesslogAlertHandler,
                 'oracle-json': OracleAlertHandler,
-                'google-api-json': GoogleAlertHandler
+                'google-api-json': GoogleAlertHandler,
+                'watchtowr-json': WatchTowrAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
@@ -6130,7 +6274,8 @@ function RealTimeMonitoring() {
                 'malicious email campaign detected (>20)': JsonAlertHandler,
                 'azure same user login failed multiple times': Risky_Countries_AlertHandler,
                 'no log received alert': NoLogAlertHandler,
-                'outgoing ssh/rdp protocol used': FortigateAlertHandler
+                'outgoing ssh/rdp protocol used': FortigateAlertHandler,
+                'gems2': GemsAlertHandler
             };
             const Summary = $('#summary-val').text().trim();
             let No_Decoder_handler = null;
