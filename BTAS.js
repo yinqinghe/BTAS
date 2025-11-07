@@ -6275,7 +6275,8 @@ function RealTimeMonitoring() {
                 'azure same user login failed multiple times': Risky_Countries_AlertHandler,
                 'no log received alert': NoLogAlertHandler,
                 'outgoing ssh/rdp protocol used': FortigateAlertHandler,
-                'gems2': GemsAlertHandler
+                'gems2': GemsAlertHandler,
+                'multiple server side error for same ip and url': AlicloudAlertHandler
             };
             const Summary = $('#summary-val').text().trim();
             let No_Decoder_handler = null;
