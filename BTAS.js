@@ -577,7 +577,11 @@ function ToWhitelist() {
     };
     localStorage.setItem('whitelist', JSON.stringify(whitelist));
     let cachedEntry = GM_getValue('cachedEntry', null);
-    window.open(`${cachedEntry['hk']}/plugins/servlet/desk/portal/2/create/100`, '_blank');
+    if (summary.toLowerCase().includes('agent disconnected')) {
+        window.open(`${cachedEntry['hk']}/plugins/servlet/desk/portal/2/create/451`, '_blank');
+    } else {
+        window.open(`${cachedEntry['hk']}/plugins/servlet/desk/portal/2/create/206`, '_blank');
+    }
 }
 
 /**
@@ -5970,21 +5974,21 @@ function MonitorDev() {
     }
     let white = JSON.parse(localStorage.getItem('whitelist'));
 
-    if (window.location.href.includes('/portal/2/create/100')) {
+    if (window.location.href.includes('/portal/2/create')) {
         const interval = setInterval(() => {
             var iframe = document.getElementById('rw_iframe');
             var iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
             var element = iframeDocument.getElementById('summary');
-            if (element) {
+            if (window.location.href.includes('451') && element) {
+                let summary = 'Delete Agent ' + white['summary'].split('Agent')[0];
+                iframeDocument.getElementById('summary').value = summary;
+                iframeDocument.getElementById('customfield_14601').value = formatDate();
+                iframeDocument.getElementById('customfield_14600').value = formatDate();
+                clearInterval(interval);
+            }
+            if (window.location.href.includes('206') && element) {
                 let summary = 'Whitelist ' + white['summary'].replace('Wazuh', white['LogSourceDomain']);
                 iframeDocument.getElementById('summary').value = summary;
-                if (white['LogSourceDomain'] != '') {
-                    iframeDocument.getElementById('s2id_labels').innerHTML =
-                        `<ul class="select2-choices">  <li class="select2-search-choice">    <div>` +
-                        white['LogSourceDomain'] +
-                        `</div>    <a href="#" class="select2-search-choice-close" tabindex="-1"></a></li><li class="select2-search-field">    <input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="select2-input" id="s2id_autogen1" style="width: 10px;">  </li></ul>`;
-                    iframeDocument.getElementById('labels').value = white['LogSourceDomain'];
-                }
                 iframeDocument.getElementById('customfield_14601').value = formatDate();
                 iframeDocument.getElementById('customfield_14600').value = formatDate();
                 iframeDocument.getElementById('customfield_14610').value = 'Yes';
