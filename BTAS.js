@@ -1110,7 +1110,6 @@ function cortexAlertHandler(...kwargs) {
         } catch (error) {
             console.log(`Error: ${error.message}`);
         }
-        console.log('===cortex_url', cortex_url);
 
         function process(cortex_xdr) {
             try {
@@ -1147,25 +1146,24 @@ function cortexAlertHandler(...kwargs) {
                     const {
                         action_local_ip,
                         action_file_macro_sha256,
-                        action_file_name,
                         action_file_path,
                         action_file_sha256,
-                        action_process_image_name,
                         action_process_image_sha256,
                         action_process_image_command_line,
                         action_external_hostname,
-                        actor_process_image_name,
+                        action_process_signature_status,
                         actor_process_image_path,
                         actor_process_image_sha256,
                         actor_process_command_line,
-                        causality_actor_process_image_name,
+                        actor_process_signature_status,
                         causality_actor_process_command_line,
                         causality_actor_process_image_path,
                         causality_actor_process_image_sha256,
-                        os_actor_process_image_name,
+                        causality_actor_process_signature_status,
                         os_actor_process_image_path,
                         os_actor_process_command_line,
                         os_actor_process_image_sha256,
+                        os_actor_process_signature_status,
                         action_pretty,
                         host_name,
                         host_ip,
@@ -1173,27 +1171,26 @@ function cortexAlertHandler(...kwargs) {
                         alert_link
                     } = cortex_xdr;
                     const action_list = {
-                        action_file_name,
                         action_file_path,
                         action_file_sha256,
-                        action_process_image_name,
+                        action_process_signature_status,
                         action_process_image_sha256,
                         action_process_image_command_line
                     };
                     const actor_list = {
-                        actor_process_image_name,
+                        actor_process_signature_status,
                         actor_process_image_path,
                         actor_process_image_sha256,
                         actor_process_command_line
                     };
                     const causality_actor_list = {
-                        causality_actor_process_image_name,
+                        causality_actor_process_signature_status,
                         causality_actor_process_command_line,
                         causality_actor_process_image_path,
                         causality_actor_process_image_sha256
                     };
                     const os_actor_list = {
-                        os_actor_process_image_name,
+                        os_actor_process_signature_status,
                         os_actor_process_image_path,
                         os_actor_process_command_line,
                         os_actor_process_image_sha256
@@ -1228,7 +1225,7 @@ function cortexAlertHandler(...kwargs) {
                     const lengths = [action_cmd_length, actor_cmd_length, causality_cmd_length, os_cmd_length];
                     const maxLength = Math.max(...lengths);
 
-                    let filename;
+                    let file_signature_status;
                     let filepath;
                     let sha256;
                     let cmd;
@@ -1237,28 +1234,28 @@ function cortexAlertHandler(...kwargs) {
                         if (!WhiteFilehash(action_file_sha256 || action_process_image_sha256)) {
                             sha256 = action_file_sha256 || action_process_image_sha256;
                         }
-                        filename = action_file_name || action_process_image_name;
+                        file_signature_status = action_process_signature_status;
                         filepath = action_file_path;
                         cmd = action_process_image_command_line;
                     } else if (actor_cmd_length === maxLength && actorPropsCount === maxCount) {
                         if (!WhiteFilehash(actor_process_image_sha256)) {
                             sha256 = actor_process_image_sha256;
                         }
-                        filename = actor_process_image_name;
+                        file_signature_status = actor_process_signature_status;
                         filepath = actor_process_image_path;
                         cmd = actor_process_command_line;
                     } else if (causality_cmd_length === maxLength && causalityPropsCount === maxCount) {
                         if (!WhiteFilehash(causality_actor_process_image_sha256)) {
                             sha256 = causality_actor_process_image_sha256;
                         }
-                        filename = causality_actor_process_image_name;
+                        file_signature_status = causality_actor_process_signature_status;
                         filepath = causality_actor_process_image_path;
                         cmd = causality_actor_process_command_line;
                     } else if (os_actor_process_image_name && osPropsCount === maxCount) {
                         if (!WhiteFilehash(os_actor_process_image_sha256)) {
                             sha256 = os_actor_process_image_sha256;
                         }
-                        filename = os_actor_process_image_name;
+                        file_signature_status = os_actor_process_signature_status;
                         filepath = os_actor_process_image_path;
                         cmd = os_actor_process_command_line;
                     }
@@ -1269,7 +1266,7 @@ function cortexAlertHandler(...kwargs) {
                         host_ip,
                         alert_link,
                         user_name,
-                        filename,
+                        file_signature_status,
                         filepath,
                         cmd,
                         sha256,
@@ -1312,12 +1309,12 @@ function cortexAlertHandler(...kwargs) {
             let unPanNgfw = [
                 'host_name',
                 'host_ip',
+                'user_name',
                 'sha256',
                 'action_file_macro_sha256',
                 'filepath',
-                'filename',
+                'file_signature_status',
                 'cmd',
-                'user_name',
                 'action_local_ip'
             ];
 
@@ -3854,7 +3851,7 @@ function SangforAlertHandler(...kwargs) {
             for (const key in info) {
                 if (Object.hasOwnProperty.call(info, key)) {
                     const value = info[key];
-                    if (value !== undefined) {
+                    if (value !== undefined && value !== '0.0.0.0') {
                         if (key == 'event_evidence') {
                             desc += `${key}: ${value.replace(/</g, '&lt;').replace(/>/g, '&gt;')}\n`;
                         } else if (key == 'start_time' || key == 'end_time' || key == 'AlertTime') {
