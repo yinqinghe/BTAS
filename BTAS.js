@@ -1057,6 +1057,42 @@ function monitorList() {
     });
 }
 
+class AlertHander {
+    constructor(alertInfo, summary, raw_alert) {
+        this.alertInfo = alertInfo;
+        this.summary = summary;
+        this.dialogId = 'alertDescriptionDialog';
+        this.raw_alert = raw_alert;
+    }
+    generateDescription = () => {
+        const alertDescriptions = [];
+        for (const info of this.alertInfo) {
+            let desc = `Observed ${this.summary.split(']')[1].trim()}\n`;
+            Object.entries(info).forEach(([key, value]) => {
+                if (value !== undefined && value !== ' ' && value !== '' && key !== 'Summary') {
+                    if (key.toLowerCase() === 'createtime') {
+                        desc += `<strong>createtime(<span class="red_highlight">GMT</span>):</strong> ${value}\n`;
+                    } else {
+                        desc += `<strong>${key}:</strong> ${value}\n`;
+                    }
+                }
+            });
+            alertDescriptions.push(desc);
+        }
+        const alertMsg = [...new Set(alertDescriptions)].join('\n\n');
+        showDialog(alertMsg);
+    };
+    addDescriptionButton(buttonId = 'generateDescription', buttonText = 'Description') {
+        const num_alert = $('#customfield_10300-val').text().trim();
+        if (this.raw_alert < num_alert) {
+            AJS.banner({
+                body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${this.raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+            });
+        }
+        addButton(buttonId, buttonText, () => this.generateDescription());
+    }
+}
+
 /**
  * Creates three buttons on a JIRA issue page to handle Cortex XDR alerts
  * The buttons allow users to generate a description of the alerts, open the alert card page and timeline page
@@ -2869,30 +2905,68 @@ function ProofpointAlertHandler(...kwargs) {
 }
 
 function ZscalerAlertHandler(...kwargs) {
-    const { summary, rawLog } = kwargs[0];
+    const { summary, rawLog, DecoderName } = kwargs[0];
     var raw_alert = 0;
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
             try {
-                const BraceIndex = log.toString().indexOf('{');
-                const lastBraceIndex = log.toString().lastIndexOf('}');
-
-                // If the braces are found
-                if (BraceIndex !== -1) {
-                    raw_alert += 1;
-                    // Intercepts a substring from the beginning of the brace to the end of the string
-                    json_text = log.toString().substr(BraceIndex, lastBraceIndex);
-                    const json_alert = JSON.parse(json_text);
-                    const { PrivateIP, PublicIP, Username, Customer, Hostname } = json_alert;
-                    const alertExtraInfo = {
+                if (log.length == 0) {
+                    return acc;
+                }
+                const jsonString = log.match(/{.*}/)[0];
+                let json_alert = JSON.parse(jsonString);
+                console.log('===', json_alert);
+                if (DecoderName == 'zscaler-zpa-json') {
+                    const { PrivateIP, PublicIP, Username, Customer, Hostname } = json_alert || {};
+                    const alertInfo = {
                         Hostname: Hostname ? Hostname : undefined,
                         PublicIP: PublicIP ? PublicIP : undefined,
                         PrivateIP: PrivateIP ? PrivateIP : undefined,
                         Username: Username ? Username : undefined,
                         Customer: Customer ? Customer : undefined
                     };
-                    acc.push({ alertExtraInfo });
+                    acc.push(alertInfo);
                 }
+                if (DecoderName == 'zscaler-json') {
+                    const {
+                        time,
+                        login,
+                        proto,
+                        eurl,
+                        action,
+                        appclass,
+                        cip,
+                        sip,
+                        urlclass,
+                        location,
+                        ua,
+                        respcode,
+                        ereferer,
+                        deviceowner,
+                        devicehostname
+                    } = json_alert?.event || {};
+                    const alertInfo = Object.fromEntries(
+                        Object.entries({
+                            time,
+                            devicehostname,
+                            login,
+                            deviceowner,
+                            appclass,
+                            urlclass,
+                            cip,
+                            sip,
+                            action,
+                            location,
+                            proto,
+                            eurl,
+                            ereferer,
+                            respcode,
+                            ua
+                        }).filter(([_, v]) => v !== undefined)
+                    );
+                    acc.push(alertInfo);
+                }
+                raw_alert += 1;
             } catch (error) {
                 console.log(`Error: ${error.message}`);
             }
@@ -2900,33 +2974,10 @@ function ZscalerAlertHandler(...kwargs) {
         }, []);
         return alertInfo;
     }
-
     const alertInfo = parseLog(rawLog);
-    const num_alert = $('#customfield_10300-val').text().trim();
-    if (raw_alert < num_alert) {
-        AJS.banner({
-            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-        });
-    }
-    function generateDescription() {
-        const alertDescriptions = [];
 
-        for (const info of alertInfo) {
-            let desc = `Observed ${summary.split(']')[1]}\n`;
-            for (const key in info.alertExtraInfo) {
-                if (Object.hasOwnProperty.call(info.alertExtraInfo, key)) {
-                    const value = info.alertExtraInfo[key];
-                    if (value !== undefined) {
-                        desc += `${key}: ${value}\n`;
-                    }
-                }
-            }
-            alertDescriptions.push(desc);
-        }
-        const alertMsg = [...new Set(alertDescriptions)].join('\n'); //Can achieve automatic deduplication
-        showDialog(alertMsg);
-    }
-    addButton('generateDescription', 'Description', generateDescription);
+    const alertDesc = new AlertHander(alertInfo, summary, raw_alert);
+    alertDesc.addDescriptionButton('generateDescription', 'Description');
 }
 
 function PulseAlertHandler(...kwargs) {
@@ -5770,6 +5821,16 @@ function GemsAlertHandler(...kwargs) {
                         result['ipAddress'] = gems['ipAddress'];
                         result['deviceId'] = gems['deviceId'];
                     }
+                    if (gems['log_type'] == 'audit') {
+                        result['createtime'] = gems['timestamp'].split('.')[0] + 'Z';
+                        result['employeeId'] = gems['employeeId'];
+                        result['employeeName'] = gems['employeeName'];
+                        result['department'] = gems['department'];
+                        result['roleFrom'] = gems['roleFrom']['id'];
+                        result['roleTo'] = gems['roleTo']['id'];
+                        result['modifiedBy'] = gems['modifiedBy'];
+                        result['modifiedByName'] = gems['modifiedByName'];
+                    }
                     acc.push(result);
                 }
 
@@ -5794,7 +5855,7 @@ function GemsAlertHandler(...kwargs) {
             let desc = `Observed ${summary.split(']').at(-1)}\n`;
             if (typeof info === 'object') {
                 Object.entries(info).forEach(([index, value]) => {
-                    if (value !== undefined && value !== ' ' && index != 'Summary') {
+                    if (value !== undefined) {
                         if (index == 'createtime') {
                             desc += `<strong>createtime(<span class="red_highlight">GMT</span>):</strong> ${value}\n`;
                         } else {
@@ -6268,7 +6329,8 @@ function RealTimeMonitoring() {
                 'google-api-json': GoogleAlertHandler,
                 'watchtowr-json': WatchTowrAlertHandler,
                 'threatbook-tdp': CheckPointEmailHandler,
-                'kes': GemsAlertHandler
+                'kes': GemsAlertHandler,
+                'zscaler-json': ZscalerAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
