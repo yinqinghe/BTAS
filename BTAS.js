@@ -5372,7 +5372,7 @@ function F5AsmAlertHandler(...kwargs) {
 }
 
 function CheckPointEmailHandler(...kwargs) {
-    const { rawLog, summary } = kwargs[0];
+    const { rawLog, summary, DecoderName } = kwargs[0];
     var raw_alert = 0;
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
@@ -5382,16 +5382,35 @@ function CheckPointEmailHandler(...kwargs) {
                 }
                 const jsonString = log.match(/{.*}/)[0];
                 let result = JSON.parse(jsonString);
-                fieldNames = ['app_id', 'id', 'confidence_level_int', 'tenant_id', 'rule_id'];
-                result['time'] = result['time'].split('.')[0];
-                fieldNames.forEach((field) => {
-                    if (result.hasOwnProperty(field)) {
-                        delete result[field];
-                    }
-                });
+                console.log('===result', result);
+                if (DecoderName == 'checkpoint-harmony-email-saas') {
+                    fieldNames = ['app_id', 'id', 'confidence_level_int', 'tenant_id', 'rule_id'];
+                    result['time'] = result['time'].split('.')[0];
+                    fieldNames.forEach((field) => {
+                        if (result.hasOwnProperty(field)) {
+                            delete result[field];
+                        }
+                    });
+                    acc.push(result);
+                }
+                if (DecoderName == 'threatbook-tdp') {
+                    acc.push({
+                        createtime: result['timeStr'],
+                        assets_machine: result['assets_machine'],
+                        dest_assets_machine: result['dest_assets_machine'],
+                        type: result['threat']['type'],
+                        name: result['threat']['name'],
+                        msg: result['threat']['msg'],
+                        payload: result['threat']['payload'],
+                        reqs_header: result['net']['http']['reqs_header'].replace(/[\r\n]+/g, ' '),
+                        reqs_line: result['net']['http']['reqs_line'],
+                        resp_header: result['net']['http']['resp_header'].replace(/[\r\n]+/g, ' '),
+                        resp_line: result['net']['http']['resp_line'],
+                        status: result['net']['http']['status'],
+                        tdp_url: result['tdp_url']
+                    });
+                }
 
-                console.log('===', result);
-                acc.push(result);
                 raw_alert += 1;
             } catch (error) {
                 console.log(`Error: ${error}`);
@@ -5413,7 +5432,7 @@ function CheckPointEmailHandler(...kwargs) {
         for (const info of alertInfo) {
             let desc = `Observed ${summary.split(']').at(-1)}\n`;
             Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && value !== ' ' && index != 'Summary') {
+                if (value !== undefined && value !== '' && value !== 0) {
                     if (index == 'time') {
                         desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
                     } else {
@@ -5727,7 +5746,7 @@ function WatchTowrAlertHandler(...kwargs) {
 }
 
 function GemsAlertHandler(...kwargs) {
-    const { rawLog, summary } = kwargs[0];
+    const { rawLog, summary, DecoderName } = kwargs[0];
     var raw_alert = 0;
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
@@ -5735,19 +5754,25 @@ function GemsAlertHandler(...kwargs) {
                 if (log.length == 0) {
                     return acc;
                 }
-                let gems = JSON.parse(log)['gems2'];
-
-                let result = {};
-                if (gems['log_type'] == 'authentication') {
-                    result['createtime'] = gems['timestamp'].split('.')[0] + 'Z';
-                    result['eventType'] = gems['eventType'];
-                    result['eventStatus'] = gems['eventStatus'];
-                    result['userId'] = gems['userId'];
-                    result['ipAddress'] = gems['ipAddress'];
-                    result['deviceId'] = gems['deviceId'];
+                if (DecoderName == 'kes') {
+                    console.log('===', log);
+                    let res = log.replace(/\\r\\n/g, '\n');
+                    console.log('===', res);
+                    acc.push(res);
+                } else {
+                    let gems = JSON.parse(log)['gems2'];
+                    let result = {};
+                    if (gems['log_type'] == 'authentication') {
+                        result['createtime'] = gems['timestamp'].split('.')[0] + 'Z';
+                        result['eventType'] = gems['eventType'];
+                        result['eventStatus'] = gems['eventStatus'];
+                        result['userId'] = gems['userId'];
+                        result['ipAddress'] = gems['ipAddress'];
+                        result['deviceId'] = gems['deviceId'];
+                    }
+                    acc.push(result);
                 }
 
-                acc.push(result);
                 raw_alert += 1;
             } catch (error) {
                 console.log(`Error: ${error}`);
@@ -5767,15 +5792,19 @@ function GemsAlertHandler(...kwargs) {
         const alertDescriptions = [];
         for (const info of alertInfo) {
             let desc = `Observed ${summary.split(']').at(-1)}\n`;
-            Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && value !== ' ' && index != 'Summary') {
-                    if (index == 'createtime') {
-                        desc += `<strong>createtime(<span class="red_highlight">GMT</span>):</strong> ${value}\n`;
-                    } else {
-                        desc += `<strong>${index}:</strong> ${value}\n`;
+            if (typeof info === 'object') {
+                Object.entries(info).forEach(([index, value]) => {
+                    if (value !== undefined && value !== ' ' && index != 'Summary') {
+                        if (index == 'createtime') {
+                            desc += `<strong>createtime(<span class="red_highlight">GMT</span>):</strong> ${value}\n`;
+                        } else {
+                            desc += `<strong>${index}:</strong> ${value}\n`;
+                        }
                     }
-                }
-            });
+                });
+            } else {
+                desc += info + '\n';
+            }
             alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
@@ -6237,7 +6266,9 @@ function RealTimeMonitoring() {
                 'web-accesslog-iis-default': WebAccesslogAlertHandler,
                 'oracle-json': OracleAlertHandler,
                 'google-api-json': GoogleAlertHandler,
-                'watchtowr-json': WatchTowrAlertHandler
+                'watchtowr-json': WatchTowrAlertHandler,
+                'threatbook-tdp': CheckPointEmailHandler,
+                'kes': GemsAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
