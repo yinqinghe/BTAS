@@ -12,6 +12,7 @@
 // @match        https://security.microsoft.com/*
 // @include      https://caas*.com/*
 // @include      https://mss*mss.com/*
+// @include      https://mss.*.com/*
 // @icon         https://avatars.githubusercontent.com/u/42169240?v=4
 // @require      https://code.jquery.com/jquery-3.6.4.min.js
 // @require      https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js
@@ -358,6 +359,11 @@ function registerSearchMenu() {
     }/issues/?jql=text ~ "%s" AND "Log Source Domain" ~ "%D" ${Host()} ORDER BY created DESC`;
     if (window.location.href.includes(cachedEntry['macao'].split('//')[1])) {
         url = `${cachedEntry['macao']}/issues/?jql=text ~ "%s" ORDER BY created DESC`;
+    }
+    if (window.location.href.includes(cachedEntry['nyx'].split('//')[1])) {
+        url = `${
+            cachedEntry['nyx']
+        }/issues/?jql=text ~ "%s" AND "Log Source Domain" ~ "%D" ${Host()} ORDER BY created DESC`;
     }
     console.log('===url', url);
 
@@ -980,6 +986,7 @@ function ticketNotify(pageData) {
         let projectMap = {};
         projectMap[cachedEntry['hk'].split('//')[1]] = 'HK';
         projectMap[cachedEntry['macao'].split('//')[1]] = 'MO';
+        projectMap[cachedEntry['nyx'].split('//')[1]] = 'HK';
 
         for (const notify of Notifydict) {
             const { ticketname, starttime, endtime, message, properties, button, status, project } = notify;
@@ -5237,7 +5244,7 @@ function SentinelOneAlertHandler(...kwargs) {
                     agentMitigationMode: sentinel_one.agentMitigationMode,
                     filePath: sentinel_one.threatInfo.filePath,
                     sha1: sentinel_one.threatInfo.sha1,
-                    confidenceLevel: sentinel_one.threatInfo.filePath,
+                    confidenceLevel: sentinel_one.threatInfo.confidenceLevel,
                     threatName: sentinel_one.threatInfo.threatName,
                     processUser: sentinel_one.threatInfo.processUser,
                     agentComputerName: sentinel_one.agentComputerName,
@@ -6425,7 +6432,10 @@ function RealTimeMonitoring() {
         let cachedEntry = GM_getValue('cachedEntry', null);
         Description = $('#description-val').text().trim();
         Summary = $('#summary-val').text().trim();
-        if (window.location.host === cachedEntry['hk'].split('//')[1]) {
+        if (
+            window.location.host === cachedEntry['hk'].split('//')[1] ||
+            window.location.host === cachedEntry['nyx'].split('//')[1]
+        ) {
             // for HK
             LogSourceDomain = $('#customfield_10223-val').text().trim();
             Source = $('#customfield_10113-val').text().trim();
