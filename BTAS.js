@@ -1297,7 +1297,7 @@ function cortexAlertHandler(...kwargs) {
                         file_signature_status = causality_actor_process_signature_status;
                         filepath = causality_actor_process_image_path;
                         cmd = causality_actor_process_command_line;
-                    } else if (os_actor_process_image_name && osPropsCount === maxCount) {
+                    } else if (os_actor_process_image_path && osPropsCount === maxCount) {
                         if (!WhiteFilehash(os_actor_process_image_sha256)) {
                             sha256 = os_actor_process_image_sha256;
                         }
@@ -1390,7 +1390,7 @@ function cortexAlertHandler(...kwargs) {
                         }
                     }
                 }
-                // desc += `description: ${description}\n`;
+                desc += `description: ${description}\n`;
                 if (info['action_file_macro_sha256'] || info['sha256']) {
                     desc += `<a href="https://www.virustotal.com/gui/file/${
                         info['action_file_macro_sha256'] || info['sha256']
@@ -4254,7 +4254,7 @@ function MDE365AlertHandler(...kwargs) {
                                 if (evidenceItem.entityType == 'Registry' && evidenceItem.registryKey != undefined) {
                                     if (evidenceItem.registryHive != undefined) {
                                         evidences['registry'].push({
-                                            registryKey: `${evidenceItem.registryHive}\\${evidenceItem.registryKey}`,
+                                            registryKey: `${evidenceItem.registryHive}\\\\${evidenceItem.registryKey}`,
                                             registryValue: evidenceItem.registryValue
                                         });
                                     } else {
@@ -4269,11 +4269,11 @@ function MDE365AlertHandler(...kwargs) {
                                     if ('userPrincipalName' in evidenceItem) {
                                         userEntry[
                                             'userPrincipalName'
-                                        ] = `${evidenceItem.userPrincipalName}\\${evidenceItem.domainName}(DomainName)`;
+                                        ] = `${evidenceItem.userPrincipalName}\\\\${evidenceItem.domainName}(DomainName)`;
                                     } else {
                                         userEntry[
                                             'accountName'
-                                        ] = `${evidenceItem.accountName}\\${evidenceItem.domainName}(DomainName)`;
+                                        ] = `${evidenceItem.accountName}\\\\${evidenceItem.domainName}(DomainName)`;
                                     }
                                     userEntry['userSid'] = evidenceItem.userSid;
                                     evidences['user'].push(userEntry);
@@ -4398,7 +4398,7 @@ function MDE365AlertHandler(...kwargs) {
                                         });
                                     }
                                     if (entity['entityType'] == 'Process') {
-                                        // if (processCommandLine == '') {
+                                        // if (entity.processCommandLine == undefined) {
                                         //     return;
                                         // }
                                         let fileEntry = {
@@ -4506,6 +4506,7 @@ function MDE365AlertHandler(...kwargs) {
     let entities = [];
     parseLog(rawLog);
     const cachedMappingContent = GM_getValue('cachedMappingContent', null);
+    const invalidValues = ['', 'N/A', undefined, null, `undefined\\\\undefined`];
 
     function generateDescription_MDE() {
         console.log('===alertInfo_MDE', alertInfo_MDE);
@@ -4524,24 +4525,23 @@ function MDE365AlertHandler(...kwargs) {
                             if (Array.isArray(item[subKey])) {
                                 item[subKey].forEach((i) => {
                                     desc += '\n';
-                                    for (let subkey in i) {
-                                        if (i[subkey] !== '' && i[subkey] !== undefined) {
-                                            desc += `${subkey}: ${i[subkey]}\n`;
-                                            if (subKey == 'user' || subKey == 'userSid') {
-                                                entities.push(`${subKey}: ${i[subKey]}`);
+                                    for (let sub_key in i) {
+                                        if (!invalidValues.includes(i[sub_key])) {
+                                            desc += `${sub_key}: ${i[sub_key]}\n`;
+                                            if (['accountName', 'userSid', 'userPrincipalName'].includes(sub_key)) {
+                                                entities.push(`${sub_key}: ${i[sub_key]}`);
                                             }
                                         }
                                     }
                                 });
-                            } else if (item[subKey] !== '' && item[subKey] !== undefined && subKey !== 'alertId') {
+                            } else if (!invalidValues.includes(item[subKey]) && subKey !== 'alertId') {
                                 desc += `${subKey}: ${item[subKey]}\n`;
                             }
                         }
                     });
                 } else {
                     if (
-                        info[key] !== undefined &&
-                        info[key] !== 'N/A' &&
+                        !invalidValues.includes(info[key]) &&
                         key !== 'extrainfo' &&
                         key !== 'summary' &&
                         key !== 'id'
@@ -4580,16 +4580,16 @@ function MDE365AlertHandler(...kwargs) {
                                 if (Array.isArray(item[subKey])) {
                                     item[subKey].forEach((i) => {
                                         desc += '\n';
-                                        for (let subKey in i) {
-                                            if (i[subKey] !== '' && i[subKey] !== undefined) {
-                                                desc += `${subKey}: ${i[subKey]}\n`;
-                                                if (subKey == 'user' || subKey == 'userSid') {
-                                                    entities.push(`${subKey}: ${i[subKey]}`);
+                                        for (let sub_key in i) {
+                                            if (!invalidValues.includes(i[sub_key])) {
+                                                desc += `${sub_key}: ${i[sub_key]}\n`;
+                                                if (['accountName', 'userSid', 'userPrincipalName'].includes(sub_key)) {
+                                                    entities.push(`${sub_key}: ${i[sub_key]}`);
                                                 }
                                             }
                                         }
                                     });
-                                } else if (item[subKey] !== '' && item[subKey] !== undefined && subKey !== 'alertId') {
+                                } else if (!invalidValues.includes(item[subKey]) && subKey !== 'alertId') {
                                     desc += `${subKey}: ${item[subKey]}\n`;
                                     if (subKey == 'Host') {
                                         entities.push(`${subKey}: ${item[subKey]}`);
@@ -4602,8 +4602,7 @@ function MDE365AlertHandler(...kwargs) {
                         });
                     } else {
                         if (
-                            info[key] !== undefined &&
-                            info[key] !== ' ' &&
+                            !invalidValues.includes(info[key]) &&
                             key !== 'summary' &&
                             key !== 'alertid' &&
                             key !== 'incidenturi'
@@ -4654,7 +4653,6 @@ function MDE365AlertHandler(...kwargs) {
             if (LogSourceDomain == cachedMappingContent['ffa']) {
                 extra = 'Remediation Advise:建议\n|Item|Finding|\n|Type| |\n|Severity| |';
             }
-
             alertMsg = `${extra}
 |Remediation Advise| |
 |Suspicious Findings| |
@@ -6340,7 +6338,10 @@ function RealTimeMonitoring() {
                 'no log received alert': NoLogAlertHandler,
                 'outgoing ssh/rdp protocol used': FortigateAlertHandler,
                 'gems2': GemsAlertHandler,
-                'multiple server side error for same ip and url': AlicloudAlertHandler
+                'multiple server side error for same ip and url': AlicloudAlertHandler,
+                'potential port scan (local to local)': FortigateAlertHandler,
+                'users failed logon to the same host in 15 mins': WineventAlertHandler,
+                'multiple authentication failures (windows)': WineventAlertHandler
             };
             const Summary = $('#summary-val').text().trim();
             let No_Decoder_handler = null;
