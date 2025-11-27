@@ -755,6 +755,9 @@ function fetchData(url, apiKey) {
                     if (item && item['name'] == 'macao' && item['url']) {
                         cachedEntry['macao'] = item['url'];
                     }
+                    if (item && item['name'] == 'nyx' && item['url']) {
+                        cachedEntry['nyx'] = item['url'];
+                    }
                     GM_setValue('cachedEntry', cachedEntry);
                 });
                 GM_setValue('cachedMappingContent', data['mapping']);
@@ -4199,6 +4202,12 @@ function MDE365AlertHandler(...kwargs) {
         const formattedDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
         return formattedDate;
     }
+    function deduplicateObjects(array) {
+        return array.filter((item, index) => {
+            const itemStr = JSON.stringify(item);
+            return index === array.findIndex((obj) => JSON.stringify(obj) === itemStr);
+        });
+    }
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
             let logObj = '';
@@ -4222,7 +4231,7 @@ function MDE365AlertHandler(...kwargs) {
 
                         let alerts = [];
                         let processCommandLine = '';
-                        let evidences = {},
+                        let evidences = { user: [], registry: [], file: [], process: [], ip: [], url: [] },
                             devices = {};
                         if (evidence) {
                             if (relatedUser) {
@@ -4243,9 +4252,6 @@ function MDE365AlertHandler(...kwargs) {
                             });
                             for (const evidenceItem of evidence) {
                                 if (evidenceItem.entityType == 'Registry' && evidenceItem.registryKey != undefined) {
-                                    if (!evidences['registry']) {
-                                        evidences['registry'] = [];
-                                    }
                                     if (evidenceItem.registryHive != undefined) {
                                         evidences['registry'].push({
                                             registryKey: `${evidenceItem.registryHive}\\${evidenceItem.registryKey}`,
@@ -4259,25 +4265,20 @@ function MDE365AlertHandler(...kwargs) {
                                     }
                                 }
                                 if (evidenceItem.entityType === 'User') {
-                                    if (!evidences['user']) {
-                                        evidences['user'] = [];
-                                    }
+                                    let userEntry = {};
                                     if ('userPrincipalName' in evidenceItem) {
-                                        evidences['user'].push({
-                                            user: `${evidenceItem.userPrincipalName}\\${evidenceItem.domainName}(DomainName)`,
-                                            userSid: evidenceItem.userSid
-                                        });
+                                        userEntry[
+                                            'userPrincipalName'
+                                        ] = `${evidenceItem.userPrincipalName}\\${evidenceItem.domainName}(DomainName)`;
                                     } else {
-                                        evidences['user'].push({
-                                            user: `${evidenceItem.accountName}\\${evidenceItem.domainName}(DomainName)`,
-                                            userSid: evidenceItem.userSid
-                                        });
+                                        userEntry[
+                                            'accountName'
+                                        ] = `${evidenceItem.accountName}\\${evidenceItem.domainName}(DomainName)`;
                                     }
+                                    userEntry['userSid'] = evidenceItem.userSid;
+                                    evidences['user'].push(userEntry);
                                 }
                                 if (evidenceItem.entityType === 'File') {
-                                    if (!evidences['file']) {
-                                        evidences['file'] = [];
-                                    }
                                     console.log('===', WhiteFilehash(evidenceItem.sha1));
                                     if (WhiteFilehash(evidenceItem.sha1) || WhiteFilehash(evidenceItem.sha256)) {
                                         evidences['file'].push({
@@ -4286,14 +4287,11 @@ function MDE365AlertHandler(...kwargs) {
                                     } else {
                                         evidences['file'].push({
                                             File: `${evidenceItem.filePath}\\\\${evidenceItem.fileName}`,
-                                            SHA1: evidenceItem.sha1
+                                            sha256: evidenceItem.sha256
                                         });
                                     }
                                 }
                                 if (evidenceItem.entityType === 'Process') {
-                                    if (!evidences['process']) {
-                                        evidences['process'] = [];
-                                    }
                                     if (evidenceItem.processCommandLine !== undefined) {
                                         processCommandLine = evidenceItem.processCommandLine.replace(
                                             /\r\n\r\n+/g,
@@ -4302,6 +4300,7 @@ function MDE365AlertHandler(...kwargs) {
                                         console.log(processCommandLine);
                                     }
                                     let processEntry = {};
+                                    processEntry['File'] = `${evidenceItem['filePath']}\\\\${evidenceItem['fileName']}`;
                                     if (
                                         evidenceItem.processCommandLine !== undefined &&
                                         evidenceItem.processCommandLine.includes('EncodedCommand')
@@ -4317,47 +4316,29 @@ function MDE365AlertHandler(...kwargs) {
                                     processEntry['accountName'] = evidenceItem.accountName;
 
                                     if (!WhiteFilehash(evidenceItem.sha1) && !WhiteFilehash(evidenceItem.sha256)) {
-                                        processEntry['SHA1'] = evidenceItem.sha1;
+                                        processEntry['sha256'] = evidenceItem.sha256;
                                     }
-                                    console.log(
-                                        '===processEntry',
-                                        processEntry,
-                                        !evidences['process'],
-                                        evidences['process']
-                                    );
+
                                     evidences['process'].push(processEntry);
                                 }
                                 if (evidenceItem.entityType === 'Url') {
-                                    if (!evidences['url']) {
-                                        evidences['url'] = [];
-                                    }
-                                    evidences['url'].push({
-                                        url: evidenceItem.url
-                                    });
+                                    evidences['url'].push({ url: evidenceItem.url });
                                 }
                                 if (evidenceItem.entityType === 'Ip') {
-                                    if (!evidences['ip']) {
-                                        evidences['ip'] = [];
-                                    }
-                                    evidences['ip'].push({
-                                        ip: evidenceItem.ipAddress
-                                    });
+                                    evidences['ip'].push({ ip: evidenceItem.ipAddress });
                                 }
                             }
                         }
                         let alert_single = {};
-                        function deduplicateObjects(array) {
-                            return array.filter((item, index) => {
-                                const itemStr = JSON.stringify(item);
-                                return index === array.findIndex((obj) => JSON.stringify(obj) === itemStr);
-                            });
-                        }
                         if (evidences.process) {
                             evidences.process = deduplicateObjects(evidences.process);
                         }
                         if (evidences.user) {
                             evidences.user = deduplicateObjects(evidences.user);
                         }
+
+                        const valuesToRemove = new Set(evidences.process.map((x) => x['sha256']));
+                        evidences.file = evidences.file.filter((obj) => !valuesToRemove.has(obj['sha256']));
                         Object.assign(alert_single, devices, evidences);
                         alert_single['description'] = alert['description'] || undefined;
                         alerts.push(alert_single);
@@ -4374,7 +4355,16 @@ function MDE365AlertHandler(...kwargs) {
                         raw_alert += 1;
                         let alerts = [];
                         logObj['incidents']['alerts'].forEach(function (alert, index) {
-                            let entities = {},
+                            let entities = {
+                                    user: [],
+                                    registry: [],
+                                    file: [],
+                                    process: [],
+                                    ip: [],
+                                    url: [],
+                                    MailMessage: [],
+                                    CloudApplication: []
+                                },
                                 devices = {};
                             if (alert !== undefined) {
                                 alert['devices'].forEach(function (device) {
@@ -4388,30 +4378,26 @@ function MDE365AlertHandler(...kwargs) {
                                 });
                                 alert['entities'].forEach(function (entity) {
                                     if (entity['entityType'] == 'User' || entity['entityType'] == 'Mailbox') {
-                                        if (!entities['user']) {
-                                            entities['user'] = [];
-                                        }
                                         let userEntry = {};
                                         if ('userPrincipalName' in entity) {
-                                            userEntry = {
-                                                user: `${entity['userPrincipalName']}\\\\${entity['domainName']}(DomainName)`
-                                            };
+                                            userEntry[
+                                                'userPrincipalName'
+                                            ] = `${entity['userPrincipalName']}\\\\${entity['domainName']}(DomainName)`;
                                         } else {
-                                            userEntry = {
-                                                user: `${entity['accountName']}\\\\${entity['domainName']}(DomainName)`,
-                                                userSid: entity['userSid']
-                                            };
+                                            userEntry[
+                                                'accountName'
+                                            ] = `${entity['accountName']}\\\\${entity['domainName']}(DomainName)`;
                                         }
+                                        userEntry['userSid'] = entity['userSid'];
                                         entities['user'].push(userEntry);
                                     }
                                     if (entity['entityType'] == 'CloudApplication') {
-                                        entities['applicationId'] = entity['applicationId'];
-                                        entities['applicationName'] = entity['applicationName'];
+                                        entities['CloudApplication'].push({
+                                            applicationId: entity['applicationId'],
+                                            applicationName: entity['applicationName']
+                                        });
                                     }
                                     if (entity['entityType'] == 'Process') {
-                                        if (!entities['process']) {
-                                            entities['process'] = [];
-                                        }
                                         // if (processCommandLine == '') {
                                         //     return;
                                         // }
@@ -4422,7 +4408,6 @@ function MDE365AlertHandler(...kwargs) {
                                         if (entity.processCommandLine && entity.processCommandLine !== undefined) {
                                             processCommandLine = entity.processCommandLine.replace(/\r\n\r\n+/g, '\n');
                                             fileEntry['cmd'] = processCommandLine;
-                                            console.log(processCommandLine);
                                             if (processCommandLine.includes('EncodedCommand')) {
                                                 let cmd_length = processCommandLine.split(' ').length;
                                                 fileEntry['Decode_Cmd'] = atob(
@@ -4430,7 +4415,7 @@ function MDE365AlertHandler(...kwargs) {
                                                 );
                                             }
                                         }
-
+                                        fileEntry['accountName'] = entity.accountName;
                                         if (
                                             Object.keys(entity).includes('sha256') &&
                                             (WhiteFilehash(entity['sha256']) || WhiteFilehash(entity['sha1']))
@@ -4443,12 +4428,7 @@ function MDE365AlertHandler(...kwargs) {
                                     }
 
                                     if (entity['entityType'] == 'File') {
-                                        if (!entities['file']) {
-                                            entities['file'] = [];
-                                        }
                                         const fileEntry = {
-                                            // filename: entity['fileName'],
-                                            // filePath: entity['filePath']
                                             File: `${entity['filePath']}\\\\${entity['fileName']}`,
                                             detectionStatus: entity['detectionStatus'],
                                             deviceId: entity['deviceId']
@@ -4465,37 +4445,21 @@ function MDE365AlertHandler(...kwargs) {
                                     }
 
                                     if (entity['entityType'] == 'Ip') {
-                                        if (!entities['ip']) {
-                                            entities['ip'] = [];
-                                        }
-                                        entities['ip'].push({
-                                            ip: entity['ipAddress']
-                                        });
+                                        entities['ip'].push({ ip: entity['ipAddress'] });
                                     }
                                     if (entity['entityType'] == 'Url') {
-                                        if (!entities['url']) {
-                                            entities['url'] = [];
-                                        }
-                                        entities['url'].push({
-                                            url: entity['url']
-                                        });
+                                        entities['url'].push({ url: entity['url'] });
                                     }
                                     if (entity['entityType'] == 'MailMessage') {
-                                        if (!entities['MailMessage']) {
-                                            entities['MailMessage'] = [];
-                                        }
                                         entities['MailMessage'].push({
-                                            subject: entity['subject'],
-                                            evidenceCreationTime: entity['evidenceCreationTime'],
+                                            evidenceCreationTime: entity['evidenceCreationTime'].split('.')[0] + 'Z',
+                                            sender: entity['sender'],
                                             recipient: entity['recipient'],
-                                            userPrincipalName: entity['userPrincipalName'],
+                                            subject: entity['subject'],
                                             remediationStatus: entity['remediationStatus']
                                         });
                                     }
                                     if (entity['entityType'] == 'Registry' && entity['registryKey'] != undefined) {
-                                        if (!entities['registry']) {
-                                            entities['registry'] = [];
-                                        }
                                         entities['registry'].push({
                                             registryKey: `${entity['registryHive']}\\\\${entity['registryKey']}`,
                                             registryValue: entity['registryValue']
@@ -4507,15 +4471,14 @@ function MDE365AlertHandler(...kwargs) {
                                     alert_single['Title'] = alert['title'];
                                 }
                                 alert_single['alertId'] = alert['alertId'];
-                                function deduplicateObjects(array) {
-                                    return array.filter((item, index) => {
-                                        const itemStr = JSON.stringify(item);
-                                        return index === array.findIndex((obj) => JSON.stringify(obj) === itemStr);
-                                    });
-                                }
                                 if (entities.process) {
                                     entities.process = deduplicateObjects(entities.process);
                                 }
+                                if (entities.user) {
+                                    entities.user = deduplicateObjects(entities.user);
+                                }
+                                const valuesToRemove = new Set(entities.process.map((x) => x['sha256']));
+                                entities.file = entities.file.filter((obj) => !valuesToRemove.has(obj['sha256']));
                                 Object.assign(alert_single, devices, entities);
                                 alert_single['description'] = alert['description'] || undefined;
                                 alerts.push(alert_single);
@@ -4529,8 +4492,6 @@ function MDE365AlertHandler(...kwargs) {
                             summary: logObj['incidents'].incidentName,
                             alerts: alerts,
                             incidenturi: logObj['incidents'].incidentUri
-                            // applicationId: entities.applicationId,
-                            // applicationName: entities.applicationName
                         });
                     }
                 } catch (error) {
@@ -4614,7 +4575,6 @@ function MDE365AlertHandler(...kwargs) {
                 for (let key in info) {
                     if (Array.isArray(info[key])) {
                         info[key].forEach((item) => {
-                            desc += '\n';
                             for (let subKey in item) {
                                 console.log('===subKey', item[subKey], subKey);
                                 if (Array.isArray(item[subKey])) {
@@ -4635,6 +4595,9 @@ function MDE365AlertHandler(...kwargs) {
                                         entities.push(`${subKey}: ${item[subKey]}`);
                                     }
                                 }
+                            }
+                            if (info[key].length != 1) {
+                                desc += '\n';
                             }
                         });
                     } else {
