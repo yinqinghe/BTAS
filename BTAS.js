@@ -1513,154 +1513,6 @@ function HTSCAlertHandler(...kwargs) {
     addButton('generateDescription', 'Description', generateDescription);
 }
 
-function VMCEFAlertHandler(...kwargs) {
-    const { rawLog } = kwargs[0];
-
-    function parseCefLog(rawLog) {
-        function cefToJson(cefLog) {
-            let json = {};
-            let fields = cefLog.split(' ');
-
-            for (let i = 0; i < fields.length; i++) {
-                let field = fields[i].split('=');
-                let key = field[0];
-                let value = field.slice(1).join('=');
-
-                if (value) {
-                    if (key === 'filePath' || key === 'msg' || key === 'start' || key === 'rt') {
-                        let nextFieldIndex = i + 1;
-                        while (nextFieldIndex < fields.length && !fields[nextFieldIndex].includes('=')) {
-                            value += ' ' + fields[nextFieldIndex];
-                            nextFieldIndex++;
-                        }
-                    }
-                    json[key] = value;
-                }
-            }
-            return json;
-        }
-
-        const alertInfo = rawLog.reduce((acc, log) => {
-            try {
-                // Determine whether the log is empty
-                if (Object.keys(log).length !== 0) {
-                    // Split CEF log
-                    let cef_log = log.split('|');
-                    // Parsing CEF Header
-                    const cef_log_header = cef_log.slice(1, 7);
-                    // Parsing CEF Extends
-                    const cef_log_extends = cefToJson(cef_log[7]);
-
-                    acc.push({
-                        Summary: cef_log_header[4],
-                        // for some like "server error" tickets
-                        HostName: cef_log_extends.dhost ? cef_log_extends.dhost : cef_log_extends.dvchost,
-                        HostIp: cef_log_extends.dst,
-                        UserName: cef_log_extends.duser,
-                        FileName: cef_log_extends.fname,
-                        FilePath: cef_log_extends.filePath,
-                        Sha256: cef_log_extends.fileHash,
-                        Msg: cef_log_extends.msg
-                    });
-                }
-                return acc;
-            } catch (error) {
-                console.error(`Error: ${error.message}`);
-            }
-        }, []);
-        return alertInfo;
-    }
-    const alertInfo = parseCefLog(rawLog);
-
-    function generateDescription() {
-        const alertDescriptions = [];
-        for (const info of alertInfo) {
-            const { Summary } = info;
-            let desc = `Observed ${Summary}\n`;
-            Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && index != 'Summary' && index != 'CBlink') {
-                    desc += `${index}: ${value}\n`;
-                }
-            });
-            alertDescriptions.push(desc);
-        }
-        const alertMsg = [...new Set(alertDescriptions)].join('\n');
-        showDialog(alertMsg);
-    }
-
-    addButton('generateDescription', 'Description', generateDescription);
-}
-
-function CBAlertHandler(...kwargs) {
-    console.log('#### Code CBAlertHandler run ####');
-    const { rawLog } = kwargs[0];
-
-    function parseLeefLog(rawLog) {
-        const alertInfo = rawLog.reduce((acc, log) => {
-            const cb_log = {};
-            try {
-                const log_obj = log.split('\t');
-                log_obj.forEach((log_item) => {
-                    try {
-                        const [key, value] = log_item.split('=');
-                        cb_log[key] = value;
-                    } catch (error) {
-                        console.error(`Error: ${error.message}`);
-                    }
-                });
-                if (log.trim() !== '') {
-                    acc.push({
-                        Summary: cb_log.watchlist_name,
-                        HostName: cb_log.computer_name,
-                        HostIp: cb_log.interface_ip,
-                        UserName: cb_log.username,
-                        CmdLine: cb_log.cmdline,
-                        CBlink: cb_log.link_process,
-                        Filepath: cb_log.path,
-                        Sha256: cb_log.process_sha256
-                    });
-                }
-            } catch (error) {
-                console.error(`Error: ${error.message}`);
-            }
-            return acc;
-        }, []);
-        return alertInfo;
-    }
-
-    const alertInfo = parseLeefLog(rawLog);
-
-    function generateDescription() {
-        const alertDescriptions = [];
-        for (const info of alertInfo) {
-            const { Summary } = info;
-            let desc = `Observed ${Summary}\n`;
-            Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && index != 'Summary' && index != 'CBlink') {
-                    desc += `${index}: ${value}\n`;
-                }
-            });
-            alertDescriptions.push(desc);
-        }
-        const alertMsg = [...new Set(alertDescriptions)].join('\n');
-        showDialog(alertMsg);
-    }
-
-    function openCB() {
-        let CBURL = '';
-        for (const info of alertInfo) {
-            const { CBlink } = info;
-            if (CBlink) {
-                CBURL += `${CBlink}\n`;
-            }
-        }
-        showFlag('info', 'CB URL:', `${CBURL}`, 'manual');
-    }
-
-    addButton('generateDescription', 'Description', generateDescription);
-    addButton('openCB', 'CB', openCB);
-}
-
 function WineventAlertHandler(...kwargs) {
     console.log('#### Code WineventAlertHandler run ####');
     let { rawLog, summary, LogSourceDomain } = kwargs[0];
@@ -6247,15 +6099,12 @@ function RealTimeMonitoring() {
                 'cortex-xdr-json': cortexAlertHandler,
                 'mde-api-json': MDE365AlertHandler,
                 'sangfor-ccom-json': HTSCAlertHandler,
-                'carbonblack': CBAlertHandler,
-                'carbonblack_cef': VMCEFAlertHandler,
                 'windows_eventchannel': WineventAlertHandler,
                 'fortigate-firewall-v5': FortigateAlertHandler,
                 'crowdstrike_cef': CSAlertHandler,
                 'sophos': SophosAlertHandler,
                 'sepm-security': SpemAlertHandler,
                 'sepm-traffic': SpemAlertHandler,
-                'vmwarecarbonblack_cef': VMCEFAlertHandler,
                 'aws-cloudtrail': AwsAlertHandler,
                 'aws-cisco-umbrella': AwsAlertHandler,
                 'm365-defender-json': MDE365AlertHandler,
