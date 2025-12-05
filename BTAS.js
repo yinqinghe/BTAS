@@ -583,10 +583,19 @@ function ToWhitelist() {
     };
     localStorage.setItem('whitelist', JSON.stringify(whitelist));
     let cachedEntry = GM_getValue('cachedEntry', null);
-    if (summary.toLowerCase().includes('agent disconnected')) {
-        window.open(`${cachedEntry['hk']}/plugins/servlet/desk/portal/2/create/451`, '_blank');
-    } else {
-        window.open(`${cachedEntry['hk']}/plugins/servlet/desk/portal/2/create/206`, '_blank');
+    if (window.location.href.includes(cachedEntry['hk'])) {
+        if (summary.toLowerCase().includes('agent disconnected')) {
+            window.open(`${cachedEntry['hk']}/plugins/servlet/desk/portal/2/create/451`, '_blank');
+        } else {
+            window.open(`${cachedEntry['hk']}/plugins/servlet/desk/portal/2/create/206`, '_blank');
+        }
+    }
+    if (window.location.href.includes(cachedEntry['nyx'])) {
+        if (summary.toLowerCase().includes('agent disconnected')) {
+            window.open(`${cachedEntry['nyx']}/plugins/servlet/desk/portal/2/create/451`, '_blank');
+        } else {
+            window.open(`${cachedEntry['nyx']}/plugins/servlet/desk/portal/2/create/206`, '_blank');
+        }
     }
 }
 
