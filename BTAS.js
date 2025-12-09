@@ -1801,12 +1801,13 @@ function CSAlertHandler(...kwargs) {
                     let cef_log = log.split('|');
                     // Parsing CEF Header
                     const cef_log_header = cef_log.slice(1, 7);
+                    console.log('===cef_log_header', cef_log_header, cef_log);
                     // Parsing CEF Extends
                     const cef_log_extends = cefToJson(cef_log[7]);
                     console.log('===', cef_log_extends);
                     raw_alert += 1;
                     acc.push({
-                        CreateTime: cef_log[0].split(' localhost ')[0],
+                        CreateTime: cef_log[0].split(' localhost ')[0].split(' 127.0.0.1 ')[0].split('streamer.go')[0],
                         Summary: cef_log_header[4],
                         // for some like "server error" tickets
                         HostName: cef_log_extends.dhost ? cef_log_extends.dhost : cef_log_extends.dvchost,
@@ -1841,7 +1842,7 @@ function CSAlertHandler(...kwargs) {
             const { Summary } = info;
             let desc = `Observed ${Summary}\n`;
             Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && index != 'Summary' && index != 'CSLink') {
+                if (value !== undefined && index != 'Summary' && index != 'CSLink' && !value.includes('CEF')) {
                     desc += `${index}: ${value}\n`;
                 }
             });
@@ -5490,7 +5491,13 @@ function MonitorDev() {
     }
     let cachedEntry = GM_getValue('cachedEntry', null);
     if (window.location.href.includes('/servlet/desk/portal/2') && window.location.href.includes('DEV')) {
-        window.location.href = `${cachedEntry['hk']}/browse/` + window.location.href.split('portal/2/')[1];
+        if (window.location.href.includes(cachedEntry['hk'])) {
+            window.location.href = `${cachedEntry['hk']}/browse/` + window.location.href.split('portal/2/')[1];
+        }
+        if (window.location.href.includes(cachedEntry['nyx'])) {
+            window.location.href = `${cachedEntry['nyx']}/browse/` + window.location.href.split('portal/2/')[1];
+        }
+
         localStorage.setItem('Dev_link', window.location.href.split('portal/2/')[1]);
     }
     if (window.location.href.includes(localStorage.getItem('Dev_link'))) {
