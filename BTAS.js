@@ -1770,57 +1770,38 @@ function CSAlertHandler(...kwargs) {
     var raw_alert = 0;
     const num_alert = $('#customfield_10300-val').text().trim();
     function parseCefLog(rawLog) {
-        function cefToJson(cefLog) {
-            let json = {};
-            let fields = cefLog.split(' ');
-
-            for (let i = 0; i < fields.length; i++) {
-                let field = fields[i].split('=');
-                let key = field[0];
-                let value = field.slice(1).join('=');
-
-                if (value) {
-                    if (key === 'filePath' || key === 'msg' || key === 'cs5' || key === 'start' || key === 'rt') {
-                        let nextFieldIndex = i + 1;
-                        while (nextFieldIndex < fields.length && !fields[nextFieldIndex].includes('=')) {
-                            value += ' ' + fields[nextFieldIndex];
-                            nextFieldIndex++;
-                        }
-                    }
-                    json[key] = value;
-                }
-            }
-            return json;
-        }
-
         const alertInfo = rawLog.reduce((acc, log) => {
             try {
-                // Determine whether the log is empty
-                if (Object.keys(log).length !== 0) {
-                    // Split CEF log
-                    let cef_log = log.split('|');
-                    // Parsing CEF Header
-                    const cef_log_header = cef_log.slice(1, 7);
-                    console.log('===cef_log_header', cef_log_header, cef_log);
-                    // Parsing CEF Extends
-                    const cef_log_extends = cefToJson(cef_log[7]);
-                    console.log('===', cef_log_extends);
-                    raw_alert += 1;
-                    acc.push({
-                        CreateTime: cef_log[0].split(' localhost ')[0].split(' 127.0.0.1 ')[0].split('streamer.go')[0],
-                        Summary: cef_log_header[4],
-                        // for some like "server error" tickets
-                        HostName: cef_log_extends.dhost ? cef_log_extends.dhost : cef_log_extends.dvchost,
-                        HostIp: cef_log_extends.dst,
-                        UserName: cef_log_extends.duser,
-                        FileName: cef_log_extends.fname,
-                        FilePath: cef_log_extends.filePath,
-                        Command: cef_log_extends.cs5,
-                        Sha256: cef_log_extends.fileHash,
-                        Msg: cef_log_extends.msg,
-                        CSLink: cef_log_extends.cs6 ? cef_log_extends.cs6 : cef_log_extends.cs1
-                    });
+                if (log.length == 0) {
+                    return acc;
                 }
+                const regex = /(\b\w+=)([^=\s].*?)(?=\s+\w+=|$)/g;
+                let match;
+                const matches = {};
+                while ((match = regex.exec(log)) !== null) {
+                    let item = match[0].split('=');
+                    matches[item[0]] = item.slice(1, item.length).join('=');
+                }
+                console.log('matches', matches);
+
+                let cef_log = log.split('|');
+                const cef_log_header = cef_log.slice(1, 7);
+                console.log('===cef_log_header', cef_log_header, cef_log);
+                raw_alert += 1;
+                acc.push({
+                    CreateTime: cef_log[0].split(' localhost ')[0].split(' 127.0.0.1 ')[0].split('streamer.go')[0],
+                    Summary: cef_log_header[4],
+                    // for some like "server error" tickets
+                    HostName: matches.dhost ? matches.dhost : matches.dvchost,
+                    HostIp: matches.dst,
+                    UserName: matches.duser,
+                    FileName: matches.fname,
+                    FilePath: matches.filePath,
+                    Command: matches.cs5,
+                    Sha256: matches.fileHash,
+                    Msg: matches.msg,
+                    CSLink: matches.cs6 ? matches.cs6 : matches.cs1
+                });
                 return acc;
             } catch (error) {
                 console.error(`Error: ${error.message}`);
