@@ -1200,6 +1200,7 @@ function cortexAlertHandler(...kwargs) {
                 } else {
                     const {
                         action_local_ip,
+                        action_remote_ip,
                         action_file_macro_sha256,
                         action_file_path,
                         action_file_sha256,
@@ -1327,6 +1328,7 @@ function cortexAlertHandler(...kwargs) {
                         sha256,
                         action_pretty,
                         action_local_ip,
+                        action_remote_ip,
                         action_file_macro_sha256,
                         action_external_hostname
                     });
@@ -1370,7 +1372,9 @@ function cortexAlertHandler(...kwargs) {
                 'filepath',
                 'file_signature_status',
                 'cmd',
-                'action_local_ip'
+                'action_remote_ip',
+                'action_local_ip',
+                'description'
             ];
 
             const cachedMappingContent = GM_getValue('cachedMappingContent', null);
@@ -1390,7 +1394,7 @@ function cortexAlertHandler(...kwargs) {
                     if (Object.hasOwnProperty.call(info, key)) {
                         const value = info[key];
                         console.log(key, value);
-                        if (value !== undefined && value !== 'N/A') {
+                        if (value !== undefined && value !== 'N/A' && !value.includes('dataset = xdr_data')) {
                             if (key == 'event_evidence') {
                                 desc += `${key}: ${value.replace(/</g, '&lt;').replace(/>/g, '&gt;')}\n`;
                             } else {
@@ -1399,7 +1403,7 @@ function cortexAlertHandler(...kwargs) {
                         }
                     }
                 }
-                desc += `description: ${description}\n`;
+                // desc += `description: ${description}\n`;
                 if (info['action_file_macro_sha256'] || info['sha256']) {
                     desc += `<a href="https://www.virustotal.com/gui/file/${
                         info['action_file_macro_sha256'] || info['sha256']
@@ -5043,26 +5047,62 @@ function OracleAlertHandler(...kwargs) {
 }
 
 function GoogleAlertHandler(...kwargs) {
-    const { rawLog, summary } = kwargs[0];
+    const { rawLog, summary, DecoderName } = kwargs[0];
     var raw_alert = 0;
+    function escapeJsString(str) {
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;');
+    }
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
             try {
                 if (log.length == 0) {
                     return acc;
                 }
-                let alert = JSON.parse(log)['alerts'];
-                let data = alert['data']['ruleViolationInfo'];
-                console.log('===', alert);
-                let result = {
-                    createtime: alert.createTime ? alert.createTime.split('.')[0] : undefined,
-                    trigger: data.trigger ? data.trigger : undefined,
-                    dataSource: data.dataSource ? data.dataSource : undefined,
-                    recipients: data.recipients ? JSON.stringify(data.recipients) : undefined,
-                    resourceInfo: data.resourceInfo ? JSON.stringify(data.resourceInfo) : undefined,
-                    securityLink: alert.securityInvestigationToolLink ? alert.securityInvestigationToolLink : undefined
-                };
-                acc.push(result);
+                if (DecoderName == 'google-api-json') {
+                    let alert = JSON.parse(log)['alerts'];
+                    let data = alert['data']['ruleViolationInfo'];
+                    let result = {
+                        createtime: alert.createTime ? alert.createTime.split('.')[0] : undefined,
+                        trigger: data.trigger ? data.trigger : undefined,
+                        dataSource: data.dataSource ? data.dataSource : undefined,
+                        recipients: data.recipients ? JSON.stringify(data.recipients) : undefined,
+                        resourceInfo: data.resourceInfo ? JSON.stringify(data.resourceInfo) : undefined,
+                        securityLink: alert.securityInvestigationToolLink
+                            ? alert.securityInvestigationToolLink
+                            : undefined
+                    };
+                    acc.push(result);
+                }
+                if (DecoderName == 'cloudflare-json') {
+                    let alert = JSON.parse(log)['cloudflare'];
+                    alert = Object.fromEntries(
+                        Object.entries(alert).filter(([key, value]) => {
+                            if (key.includes('stamp')) return false;
+                            if (value === '') return false;
+                            if (
+                                typeof value === 'object' &&
+                                value !== null &&
+                                !Array.isArray(value) &&
+                                Object.keys(value).length === 0
+                            ) {
+                                return false;
+                            }
+                            return true;
+                        })
+                    );
+                    alert['ClientRequestURI'] = escapeJsString(
+                        decodeURIComponent(alert['ClientRequestURI'].replace(/\+/g, ' '))
+                    );
+                    acc.push(alert);
+
+                    console.log('===', alert);
+                }
+
                 raw_alert += 1;
             } catch (error) {
                 console.log(`Error: ${error}`);
@@ -5714,7 +5754,8 @@ function RealTimeMonitoring() {
                 'watchtowr-json': WatchTowrAlertHandler,
                 'threatbook-tdp': CheckPointEmailHandler,
                 'kes': GemsAlertHandler,
-                'zscaler-json': ZscalerAlertHandler
+                'zscaler-json': ZscalerAlertHandler,
+                'cloudflare-json': GoogleAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
