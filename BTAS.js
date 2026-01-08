@@ -1658,7 +1658,8 @@ function FortigateAlertHandler(...kwargs) {
                 remip,
                 ref,
                 policyname,
-                filename
+                filename,
+                ip
             } = alertInfo;
             let arr = [];
             if (summary.toLowerCase().includes('infected file detected in fortigate')) {
@@ -1694,6 +1695,7 @@ function FortigateAlertHandler(...kwargs) {
                 hostname: hostname,
                 devname: devname,
                 user: user,
+                ip,
                 url: url,
                 filename: filename,
                 action: action,
@@ -3489,6 +3491,7 @@ function SangforAlertHandler(...kwargs) {
                         msg: matches.msg ? matches.msg : undefined,
                         act: matches.act ? matches.act : undefined,
                         subject: matches.subject ? matches.subject : undefined,
+                        fname: matches.fname ? matches.fname : undefined,
                         fileType: matches.fileType ? matches.fileType : undefined,
                         filePath: matches.filePath ? matches.filePath : undefined,
                         request: matches.request ? matches.request : undefined
@@ -4872,7 +4875,7 @@ function CheckPointEmailHandler(...kwargs) {
         for (const info of alertInfo) {
             let desc = `Observed ${summary.split(']').at(-1)}\n`;
             Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && value !== '' && value !== 0) {
+                if (value !== undefined && value !== '' && value !== 0 && value !== '[]') {
                     if (index == 'time') {
                         desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
                     } else {
@@ -5798,7 +5801,8 @@ function RealTimeMonitoring() {
                 'multiple server side error for same ip and url': AlicloudAlertHandler,
                 'potential port scan (local to local)': FortigateAlertHandler,
                 'users failed logon to the same host in 15 mins': WineventAlertHandler,
-                'multiple authentication failures (windows)': WineventAlertHandler
+                'multiple authentication failures (windows)': WineventAlertHandler,
+                'incoming admin protocol used': FortigateAlertHandler
             };
             const Summary = $('#summary-val').text().trim();
             let No_Decoder_handler = null;
