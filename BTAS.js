@@ -1571,14 +1571,17 @@ function WineventAlertHandler(...kwargs) {
             alertDescriptions.push(`Log Details:\n`);
         }
         for (const info of alertInfo) {
-            let desc = `Observed${info.summary}\nHost: ${info.alertHost}\nHost_IP: ${info.host_ip}\n`;
+            let desc = `Observed${info.summary}\nHost: ${info.alertHost}\n`;
+            if (info.host_ip) {
+                desc += `Host_IP: ${info.host_ip}\n`;
+            }
             const date = new Date(info.systemTime.split('.')[0]);
             date.setHours(date.getHours() + 16);
             desc += `systemTime(<span class="red_highlight">UTC+8</span>): ${date.toISOString().split('.')[0]}\n`;
             for (const key in info.eventdata) {
                 if (Object.hasOwnProperty.call(info.eventdata, key)) {
                     const value = info.eventdata[key];
-                    if (value !== undefined) {
+                    if (value !== undefined && value !== '') {
                         desc += `${key}: ${value}\n`;
                     }
                 }
@@ -1604,7 +1607,8 @@ function FortigateAlertHandler(...kwargs) {
     let { rawLog, summary, LogSourceDomain } = kwargs[0];
     var raw_alert = 0;
     const num_alert = $('#customfield_10300-val').text().trim();
-    summary = summary.split(']')[1].trim();
+    const idx = summary.indexOf(']');
+    summary = idx !== -1 ? summary.slice(idx + 1).trim() : summary.trim();
     function ParseFortigateLog(rawLog) {
         const alertInfos = rawLog.reduce((acc, log) => {
             if (log == '') {
@@ -4264,25 +4268,28 @@ function MDE365AlertHandler(...kwargs) {
         showDialog(alertMsg);
     }
     function openMDE() {
-        let MDEURL = '';
+        let MDEURL = [];
         for (const info of alertInfo_MDE) {
             const { id } = info;
             if (id) {
-                MDEURL += `https://security.microsoft.com/alerts/${id}<br>`;
+                MDEURL.push(`https://security.microsoft.com/alerts/${id}`);
             }
         }
         for (const info of alertInfo_365) {
             info.alerts.forEach((alert) => {
                 if (alert.alertId) {
-                    MDEURL += `https://security.microsoft.com/alerts/${alert.alertId}<br>`;
+                    MDEURL.push(`https://security.microsoft.com/alerts/${alert.alertId}`);
                 }
             });
             if (info.incidenturi) {
-                let incident_url = info.incidenturi.replace('hXXps[:]', 'https:') + '<br>';
-                MDEURL += incident_url;
+                let incident_url = info.incidenturi.replace('hXXps[:]', 'https:');
+                // MDEURL += incident_url;
+                MDEURL.push(incident_url);
             }
         }
-        showFlag('info', 'MDE URL:', `${MDEURL}`, 'manual');
+        MDEURL = [...new Set(MDEURL)];
+        let MDEURL_text = MDEURL.join('<br>');
+        showFlag('info', 'MDE URL:', `${MDEURL_text}`, 'manual');
         let url = 'https://security.microsoft.com/homepage?&current=';
         url += LogSourceDomain;
         for (let i = 0; i < MDEURL.length; i++) {
@@ -5234,9 +5241,13 @@ function GemsAlertHandler(...kwargs) {
                     return acc;
                 }
                 if (DecoderName == 'kes') {
-                    console.log('===', log);
-                    let res = log.replace(/\\r\\n/g, '\n');
-                    console.log('===', res);
+                    let lines = log.split(/\\r?\\n/);
+                    if (lines[0].includes(' - ')) {
+                        console.log('===', lines[0]);
+                        lines[0] = lines[0].split(' - ')[0];
+                    }
+                    console.log('===', lines);
+                    let res = lines.join('\n');
                     acc.push(res);
                 } else {
                     let gems = JSON.parse(log)['gems2'];
@@ -5404,8 +5415,17 @@ function MMB_AlertHandler() {
             start += `('$state':(store:appState),meta:(index:'wazuh-alerts-3.x-*',type:phrases,key:data.dstip,value:'${dstip}'),query:(match_phrase:(data.dstip:'${dstip}')))`;
         }
         start += '),refreshInterval:(pause:!t,value:3600000),time:(from:now-7d/d,to:now))';
+
+        if (!dstip && !srcip) {
+            const output = kibana.replace(/from:&#39;[^&]+&#39;,to:&#39;[^&]+&#39;/g, 'from:now-7d%2Fd,to:now');
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = output;
+            console.log('hello', textarea.value);
+            window.open(textarea.value, '_blank');
+        } else {
+            window.open(start, '_blank');
+        }
         console.log('===', start);
-        window.open(start, '_blank');
     }
     addButton('MMA', 'MMA', generateDescription);
 }
