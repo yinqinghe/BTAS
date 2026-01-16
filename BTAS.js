@@ -1776,7 +1776,7 @@ function FortigateAlertHandler(...kwargs) {
 }
 
 function CSAlertHandler(...kwargs) {
-    let { rawLog } = kwargs[0];
+    let { rawLog, summary } = kwargs[0];
     var raw_alert = 0;
     const num_alert = $('#customfield_10300-val').text().trim();
     function parseCefLog(rawLog) {
@@ -1798,20 +1798,30 @@ function CSAlertHandler(...kwargs) {
                 const cef_log_header = cef_log.slice(1, 7);
                 console.log('===cef_log_header', cef_log_header, cef_log);
                 raw_alert += 1;
-                acc.push({
-                    CreateTime: cef_log[0].split(' localhost ')[0].split(' 127.0.0.1 ')[0].split('streamer.go')[0],
-                    Summary: cef_log_header[4],
-                    // for some like "server error" tickets
-                    HostName: matches.dhost ? matches.dhost : matches.dvchost,
-                    HostIp: matches.dst,
-                    UserName: matches.duser,
-                    FileName: matches.fname,
-                    FilePath: matches.filePath,
-                    Command: matches.cs5,
-                    Sha256: matches.fileHash,
-                    Msg: matches.msg,
-                    CSLink: matches.cs6 ? matches.cs6 : matches.cs1
-                });
+                let data = {};
+                data['CreateTime'] = cef_log[0].split(' localhost ')[0].split(' 127.0.0.1 ')[0].split('streamer.go')[0];
+                data['Summary'] = cef_log_header[4];
+                if (summary.includes('XDR Detection Summary Event')) {
+                    data['IPv4Addresses'] = matches.ipv4Addresses;
+                    data['Users'] = matches.users;
+                    data['DomainNames'] = matches.domainNames;
+                    data['SHA256'] = matches.sha256Hashes;
+                    data['tactics'] = matches.tactics;
+                    data['techniques'] = matches.techniques;
+                } else {
+                    data['HostName'] = matches.dhost ? matches.dhost : matches.dvchost;
+                    data['HostIp'] = matches.dst;
+                    data['UserName'] = matches.duser;
+                    data['FilePath'] = matches.filePath;
+                    data['Command'] = matches.cs5;
+                    data['fileHash'] = matches.fileHash;
+                    data['Msg'] = matches.msg;
+                    data['CSLink'] = matches.cs6 ? matches.cs6 : matches.cs1;
+                    data['tactic'] = matches.tactic;
+                    data['technique'] = matches.technique;
+                }
+                console.log('===', data);
+                acc.push(data);
                 return acc;
             } catch (error) {
                 console.error(`Error: ${error.message}`);
@@ -4833,6 +4843,7 @@ function CheckPointEmailHandler(...kwargs) {
                 const jsonString = log.match(/{.*}/)[0];
                 let result = JSON.parse(jsonString);
                 console.log('===result', result);
+                let logArray = log.split(' ').filter((item) => item !== '');
                 if (DecoderName == 'checkpoint-harmony-email-saas') {
                     fieldNames = ['app_id', 'id', 'confidence_level_int', 'tenant_id', 'rule_id'];
                     result['time'] = result['time'].split('.')[0];
@@ -4860,8 +4871,22 @@ function CheckPointEmailHandler(...kwargs) {
                         tdp_url: result['tdp_url']
                     });
                 }
-
-                raw_alert += 1;
+                if (DecoderName == 'bigdata-hdfs-cef' || DecoderName == 'bigdata-hive-cef') {
+                    let data_json = {
+                        'Event time': logArray.slice(0, 3).join(' '),
+                        'reqUser': result.reqUser ? result.reqUser : undefined,
+                        'access': result.access ? result.access : undefined,
+                        'action': result.action ? result.action : undefined,
+                        'cliIP': result.cliIP ? result.cliIP : undefined,
+                        'reason': result.reason ? result.reason : undefined,
+                        'resType': result.resType ? result.resType : undefined,
+                        'reqData': result.reqData ? result.reqData : undefined,
+                        'result': result['result'] ? result['result'] : undefined,
+                        'event_count': result.event_count ? result.event_count : undefined
+                    };
+                    acc.push(data_json);
+                    raw_alert += 1;
+                }
             } catch (error) {
                 console.log(`Error: ${error}`);
             }
@@ -5778,7 +5803,9 @@ function RealTimeMonitoring() {
                 'threatbook-tdp': CheckPointEmailHandler,
                 'kes': GemsAlertHandler,
                 'zscaler-json': ZscalerAlertHandler,
-                'cloudflare-json': GoogleAlertHandler
+                'cloudflare-json': GoogleAlertHandler,
+                'bigdata-hdfs-cef': CheckPointEmailHandler,
+                'bigdata-hive-cef': CheckPointEmailHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
@@ -5824,15 +5851,14 @@ function RealTimeMonitoring() {
                 'multiple authentication failures (windows)': WineventAlertHandler,
                 'incoming admin protocol used': FortigateAlertHandler
             };
-            const Summary = $('#summary-val').text().trim();
             let No_Decoder_handler = null;
             Object.keys(No_Decoder_handlers).forEach((key) => {
-                if (Summary.toLowerCase().includes(key)) {
+                if (summary.toLowerCase().includes(key)) {
                     No_Decoder_handler = No_Decoder_handlers[key];
                 }
             });
             if (No_Decoder_handler !== null) {
-                No_Decoder_handler({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: Summary });
+                No_Decoder_handler({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: summary });
             }
             if (LogSourceDomain == '') {
                 LogSourceDomain = $('#customfield_10846-val').text().trim();
