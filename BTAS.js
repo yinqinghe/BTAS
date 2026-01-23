@@ -1186,7 +1186,8 @@ function cortexAlertHandler(...kwargs) {
                         action_remote_ip,
                         action_remote_port,
                         action_pretty,
-                        alert_link
+                        alert_link,
+                        action
                     } = cortex_xdr;
                     alertInfo.push({
                         ...alert,
@@ -1195,7 +1196,8 @@ function cortexAlertHandler(...kwargs) {
                         action_remote_ip,
                         action_remote_port,
                         action_pretty,
-                        alert_link
+                        alert_link,
+                        action
                     });
                 } else {
                     const {
@@ -1361,7 +1363,8 @@ function cortexAlertHandler(...kwargs) {
                 alert_link,
                 action_external_hostname,
                 dateTimeStr,
-                description
+                description,
+                action
             } = info;
             let unPanNgfw = [
                 'host_name',
@@ -1379,7 +1382,7 @@ function cortexAlertHandler(...kwargs) {
 
             const cachedMappingContent = GM_getValue('cachedMappingContent', null);
             if (source === 'PAN NGFW') {
-                const desc = `Observed ${name}\ntimestamp: ${dateTimeStr}\nSrcip: ${action_local_ip}   Srcport: ${action_local_port}\nDstip: ${action_remote_ip}   Dstport: ${action_remote_port}\nAction: ${action_pretty}\n${
+                const desc = `Observed ${name}\ntimestamp: ${dateTimeStr}\nSrcip: ${action_local_ip}   Srcport: ${action_local_port}\nDstip: ${action_remote_ip}   Dstport: ${action_remote_port}\nAction: ${action}-${action_pretty}\n${
                     LogSourceDomain === cachedMappingContent['cca'] ? 'Cortex Portal: ' + alert_link + '\n' : ''
                 }\n`;
                 alertDescriptions.push(desc);
@@ -3126,6 +3129,10 @@ function AlicloudAlertHandler(...kwargs) {
                             InstanceId: resourceName ? resourceName : undefined,
                             sourceIpAddress: sourceIpAddress ? sourceIpAddress : undefined,
                             userName: userIdentity?.userName ? userIdentity?.userName : undefined,
+                            type: userIdentity?.type ? userIdentity?.type : undefined,
+                            accessKeyId: userIdentity?.accessKeyId ? userIdentity?.accessKeyId : undefined,
+                            accountId: userIdentity?.accountId ? userIdentity?.accountId : undefined,
+                            principalId: userIdentity?.principalId ? userIdentity?.principalId : undefined,
                             internet_ip: internet_ip ? internet_ip : undefined,
                             intranet_ip: intranet_ip ? intranet_ip : undefined,
                             instance_id: instance_id ? instance_id : undefined,
@@ -3640,6 +3647,18 @@ function SangforAlertHandler(...kwargs) {
                     data_json[matches.cs1Label] = matches.cs1 ? matches.cs1 : undefined;
                     data_json[matches.cn1Label] = matches.cn1 ? matches.cn1 : undefined;
                     acc.push(data_json);
+                } else if (DecoderName == 'arista_cef') {
+                    let data_json = {
+                        'Event time': logArray.slice(0, 3).join(' '),
+                        'shost': matches.shost ? matches.shost : undefined,
+                        'src': matches.src ? matches.src : undefined,
+                        'dhost': matches.dhost ? matches.dhost : undefined,
+                        'dst': matches.dst ? matches.dst : undefined
+                    };
+                    data_json[matches.cs2Label] = matches.cs2 ? matches.cs2 : undefined;
+                    data_json[matches.cs4Label] = matches.cs4 ? matches.cs4 : undefined;
+                    data_json[matches.cs5Label] = matches.cs5 ? matches.cs5 : undefined;
+                    acc.push(data_json);
                 } else if (window.location.href.includes('macaumss')) {
                     acc.push({
                         'Event time': logArray.slice(0, 3).join(' '),
@@ -3845,9 +3864,8 @@ function MDE365AlertHandler(...kwargs) {
                             devices = {};
                         if (evidence) {
                             if (relatedUser) {
-                                devices[
-                                    'relatedUser'
-                                ] = `${relatedUser['userName']}\\\\${relatedUser['domainName']}(DomainName)`;
+                                devices['relatedUser'] =
+                                    `${relatedUser['userName']}\\\\${relatedUser['domainName']}(DomainName)`;
                             }
                             loggedOnUsers.forEach(function (loggedOnUser) {
                                 if (loggedOnUser) {
@@ -3877,13 +3895,11 @@ function MDE365AlertHandler(...kwargs) {
                                 if (evidenceItem.entityType === 'User') {
                                     let userEntry = {};
                                     if ('userPrincipalName' in evidenceItem) {
-                                        userEntry[
-                                            'userPrincipalName'
-                                        ] = `${evidenceItem.userPrincipalName}\\\\${evidenceItem.domainName}(DomainName)`;
+                                        userEntry['userPrincipalName'] =
+                                            `${evidenceItem.userPrincipalName}\\\\${evidenceItem.domainName}(DomainName)`;
                                     } else {
-                                        userEntry[
-                                            'accountName'
-                                        ] = `${evidenceItem.accountName}\\\\${evidenceItem.domainName}(DomainName)`;
+                                        userEntry['accountName'] =
+                                            `${evidenceItem.accountName}\\\\${evidenceItem.domainName}(DomainName)`;
                                     }
                                     userEntry['userSid'] = evidenceItem.userSid;
                                     evidences['user'].push(userEntry);
@@ -3981,22 +3997,19 @@ function MDE365AlertHandler(...kwargs) {
                                     devices['Host'] = device['deviceDnsName'];
                                     let loggedOnUsers = device['loggedOnUsers'][0];
                                     if (loggedOnUsers) {
-                                        devices[
-                                            'loggedOnUsers'
-                                        ] = `${loggedOnUsers['accountName']}\\\\${loggedOnUsers['domainName']}(DomainName)`;
+                                        devices['loggedOnUsers'] =
+                                            `${loggedOnUsers['accountName']}\\\\${loggedOnUsers['domainName']}(DomainName)`;
                                     }
                                 });
                                 alert['entities'].forEach(function (entity) {
                                     if (entity['entityType'] == 'User' || entity['entityType'] == 'Mailbox') {
                                         let userEntry = {};
                                         if ('userPrincipalName' in entity) {
-                                            userEntry[
-                                                'userPrincipalName'
-                                            ] = `${entity['userPrincipalName']}\\\\${entity['domainName']}(DomainName)`;
+                                            userEntry['userPrincipalName'] =
+                                                `${entity['userPrincipalName']}\\\\${entity['domainName']}(DomainName)`;
                                         } else {
-                                            userEntry[
-                                                'accountName'
-                                            ] = `${entity['accountName']}\\\\${entity['domainName']}(DomainName)`;
+                                            userEntry['accountName'] =
+                                                `${entity['accountName']}\\\\${entity['domainName']}(DomainName)`;
                                         }
                                         userEntry['userSid'] = entity['userSid'];
                                         entities['user'].push(userEntry);
@@ -5805,7 +5818,8 @@ function RealTimeMonitoring() {
                 'zscaler-json': ZscalerAlertHandler,
                 'cloudflare-json': GoogleAlertHandler,
                 'bigdata-hdfs-cef': CheckPointEmailHandler,
-                'bigdata-hive-cef': CheckPointEmailHandler
+                'bigdata-hive-cef': CheckPointEmailHandler,
+                'arista_cef': SangforAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
@@ -5991,17 +6005,24 @@ function RealTimeMonitoring() {
 (function () {
     ('use strict');
     RealTimeMonitoring();
-    AJS.whenIType('zv').execute(function () {
+    AJS.whenIType('xv').execute(function () {
         document.getElementById('opsbar-transitions_more').click();
-        const interval = setInterval(() => {
+        const interval1 = setInterval(() => {
             const element = document.querySelector('#action_id_761');
             if (element) {
                 document.getElementById('action_id_761').click();
-                clearInterval(interval);
+                clearInterval(interval1);
+            }
+        }, 100); // 每100毫秒检查一次
+        const interval2 = setInterval(() => {
+            const element = document.querySelector('#assign-to-me-trigger');
+            if (element) {
+                document.getElementById('assign-to-me-trigger').click();
+                clearInterval(interval2);
             }
         }, 100); // 每100毫秒检查一次
     });
-    AJS.whenIType('zx').execute(function () {
+    AJS.whenIType('xx').execute(function () {
         document.getElementById('edit-issue').click();
         const interval = setInterval(() => {
             const tabsMenu = document.querySelector('#horizontal');
