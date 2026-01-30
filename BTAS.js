@@ -1607,7 +1607,7 @@ function WineventAlertHandler(...kwargs) {
 }
 
 function FortigateAlertHandler(...kwargs) {
-    let { rawLog, summary, LogSourceDomain } = kwargs[0];
+    let { rawLog, summary, LogSourceDomain, DecoderName } = kwargs[0];
     var raw_alert = 0;
     const num_alert = $('#customfield_10300-val').text().trim();
     const idx = summary.indexOf(']');
@@ -1723,8 +1723,9 @@ function FortigateAlertHandler(...kwargs) {
         }, []);
         return extract_alert_infos;
     }
-    function ExtractAlertInfo_sonicwall(ExtractAlertInfo) {
+    function ExtractAlertInfo_sonicwall(alertInfos) {
         const extract_alert_infos = alertInfos.reduce((acc, alertInfo) => {
+            let vt_url = 'https://www.virustotal.com/gui/ip-address/' + alertInfo.dst.split(':')[0];
             acc.push({
                 time: alertInfo.time,
                 msg: alertInfo.msg,
@@ -1734,7 +1735,9 @@ function FortigateAlertHandler(...kwargs) {
                 dst: alertInfo.dst,
                 dstZone: alertInfo.dstZone,
                 natDst: alertInfo.natDst,
-                proto: alertInfo.proto
+                proto: alertInfo.proto,
+                rule: alertInfo.rule,
+                VT: `<a href="${vt_url}">${vt_url}</a>`
             });
             return acc;
         }, []);
@@ -1742,7 +1745,7 @@ function FortigateAlertHandler(...kwargs) {
     }
     let extract_alert_infos = '';
     const cachedMappingContent = GM_getValue('cachedMappingContent', null);
-    if (LogSourceDomain == cachedMappingContent['mma']) {
+    if (DecoderName == 'sonicwall') {
         extract_alert_infos = ExtractAlertInfo_sonicwall(alertInfos);
     } else {
         extract_alert_infos = ExtractAlertInfo(alertInfos);
@@ -3902,6 +3905,7 @@ function MDE365AlertHandler(...kwargs) {
                                             `${evidenceItem.accountName}\\\\${evidenceItem.domainName}(DomainName)`;
                                     }
                                     userEntry['userSid'] = evidenceItem.userSid;
+                                    userEntry['aadUserId'] = evidenceItem.aadUserId;
                                     evidences['user'].push(userEntry);
                                 }
                                 if (evidenceItem.entityType === 'File') {
@@ -4012,6 +4016,7 @@ function MDE365AlertHandler(...kwargs) {
                                                 `${entity['accountName']}\\\\${entity['domainName']}(DomainName)`;
                                         }
                                         userEntry['userSid'] = entity['userSid'];
+                                        userEntry['aadUserId'] = entity['aadUserId'];
                                         entities['user'].push(userEntry);
                                     }
                                     if (entity['entityType'] == 'CloudApplication') {
