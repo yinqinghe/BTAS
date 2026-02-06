@@ -1481,54 +1481,6 @@ function cortexAlertHandler(...kwargs) {
     addButton('openTimeline', 'Timeline', openTimeline);
 }
 
-function HTSCAlertHandler(...kwargs) {
-    console.log('#### Code HTSCAlertHandler run ####');
-    const { rawLog } = kwargs[0];
-    function decodeHtml(encodedString) {
-        const tmpElement = document.createElement('span');
-        tmpElement.innerHTML = encodedString;
-        return tmpElement.innerText;
-    }
-
-    const parseLog = (rawLog) => {
-        const alertInfo = rawLog.reduce((acc, log) => {
-            try {
-                const formatJson = log.substring(log.indexOf('{')).trim();
-                // const logObj = JSON.parse(formatJson);
-                const logObj = JSON.parse(formatJson.replace(/\\\(n/g, '\\n('));
-                const eventEvidence = decodeHtml(logObj.event_evidence).split('End time')[0];
-                const alert = {
-                    attackType: logObj.tag,
-                    hostRisk: logObj.hostRisk,
-                    srcIP: logObj.src_ip,
-                    eventEvidence,
-                    hostName: logObj.hostName,
-                    dstIP: logObj.dst_ip
-                };
-                acc.push(alert);
-            } catch (error) {
-                console.error(`Error: ${error.message}`);
-            }
-            return acc;
-        }, []);
-        return alertInfo;
-    };
-    const alertInfo = parseLog(rawLog);
-    // console.info(`alertInfo: ${alertInfo}`);
-
-    function generateDescription() {
-        const alertDescriptions = [];
-        for (const info of alertInfo) {
-            const { attackType, hostRisk, srcIP, hostName, dstIP, eventEvidence } = info;
-            const desc = `Observed ${attackType} Attack\nhostRisk: ${hostRisk}\nSrc_IP: ${srcIP}\nhostname: ${hostName}\nDst_IP: ${dstIP}\nevent_evidence: ${eventEvidence}\n`;
-            alertDescriptions.push(desc);
-        }
-        const alertMsg = [...new Set(alertDescriptions)].join('\n');
-        showDialog(alertMsg);
-    }
-    addButton('generateDescription', 'Description', generateDescription);
-}
-
 function WineventAlertHandler(...kwargs) {
     console.log('#### Code WineventAlertHandler run ####');
     let { rawLog, summary, LogSourceDomain } = kwargs[0];
@@ -3662,6 +3614,17 @@ function SangforAlertHandler(...kwargs) {
                     data_json[matches.cs4Label] = matches.cs4 ? matches.cs4 : undefined;
                     data_json[matches.cs5Label] = matches.cs5 ? matches.cs5 : undefined;
                     acc.push(data_json);
+                } else if (DecoderName == 'networkbox') {
+                    let data_json = {
+                        'Event time': logArray.slice(0, 3).join(' '),
+                        'summary': matches.summary ? matches.summary : undefined,
+                        'local_n': matches.local_n ? matches.local_n : undefined,
+                        'network_input': matches.network_input ? matches.network_input : undefined,
+                        'remote_n': matches.remote_n ? matches.remote_n : undefined,
+                        'urlhost': matches.urlhost ? matches.urlhost : undefined,
+                        'result': matches.result ? matches.result : undefined
+                    };
+                    acc.push(data_json);
                 } else if (window.location.href.includes('macaumss')) {
                     acc.push({
                         'Event time': logArray.slice(0, 3).join(' '),
@@ -4852,6 +4815,11 @@ function F5AsmAlertHandler(...kwargs) {
 function CheckPointEmailHandler(...kwargs) {
     const { rawLog, summary, DecoderName } = kwargs[0];
     var raw_alert = 0;
+    function decodeHtml(encodedString) {
+        const tmpElement = document.createElement('span');
+        tmpElement.innerHTML = encodedString;
+        return tmpElement.innerText;
+    }
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
             try {
@@ -4862,6 +4830,26 @@ function CheckPointEmailHandler(...kwargs) {
                 let result = JSON.parse(jsonString);
                 console.log('===result', result);
                 let logArray = log.split(' ').filter((item) => item !== '');
+                if (DecoderName == 'sangfor-ccom-json') {
+                    let logArray = log
+                        .split('|')[0]
+                        .split(' ')
+                        .filter((item) => item !== '');
+                    console.log(logArray);
+                    const eventEvidence = decodeHtml(result.event_evidence).split('End time')[0];
+                    let data_json = {
+                        timestamp: logArray.slice(3, 6).join(' '),
+                        attackType: result.tag,
+                        hostRisk: result.hostRisk,
+                        srcIP: result.src_ip,
+                        eventEvidence,
+                        hostName: result.hostName,
+                        dstIP: result.dst_ip,
+                        solution: result.solution
+                    };
+                    acc.push(data_json);
+                    raw_alert += 1;
+                }
                 if (DecoderName == 'checkpoint-harmony-email-saas') {
                     fieldNames = ['app_id', 'id', 'confidence_level_int', 'tenant_id', 'rule_id'];
                     result['time'] = result['time'].split('.')[0];
@@ -4874,7 +4862,7 @@ function CheckPointEmailHandler(...kwargs) {
                 }
                 if (DecoderName == 'threatbook-tdp') {
                     acc.push({
-                        createtime: result['timeStr'],
+                        timestamp: result['timeStr'],
                         assets_machine: result['assets_machine'],
                         dest_assets_machine: result['dest_assets_machine'],
                         type: result['threat']['type'],
@@ -4891,16 +4879,16 @@ function CheckPointEmailHandler(...kwargs) {
                 }
                 if (DecoderName == 'bigdata-hdfs-cef' || DecoderName == 'bigdata-hive-cef') {
                     let data_json = {
-                        'Event time': logArray.slice(0, 3).join(' '),
-                        'reqUser': result.reqUser ? result.reqUser : undefined,
-                        'access': result.access ? result.access : undefined,
-                        'action': result.action ? result.action : undefined,
-                        'cliIP': result.cliIP ? result.cliIP : undefined,
-                        'reason': result.reason ? result.reason : undefined,
-                        'resType': result.resType ? result.resType : undefined,
-                        'reqData': result.reqData ? result.reqData : undefined,
-                        'result': result['result'] ? result['result'] : undefined,
-                        'event_count': result.event_count ? result.event_count : undefined
+                        timestamp: logArray.slice(0, 3).join(' '),
+                        reqUser: result.reqUser ? result.reqUser : undefined,
+                        access: result.access ? result.access : undefined,
+                        action: result.action ? result.action : undefined,
+                        cliIP: result.cliIP ? result.cliIP : undefined,
+                        reason: result.reason ? result.reason : undefined,
+                        resType: result.resType ? result.resType : undefined,
+                        reqData: result.reqData ? result.reqData : undefined,
+                        result: result['result'] ? result['result'] : undefined,
+                        event_count: result.event_count ? result.event_count : undefined
                     };
                     acc.push(data_json);
                     raw_alert += 1;
@@ -4926,8 +4914,10 @@ function CheckPointEmailHandler(...kwargs) {
             let desc = `Observed ${summary.split(']').at(-1)}\n`;
             Object.entries(info).forEach(([index, value]) => {
                 if (value !== undefined && value !== '' && value !== 0 && value !== '[]') {
-                    if (index == 'time') {
+                    if (index == 'time' || index == 'createtime') {
                         desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
+                    } else if (index == 'timestamp') {
+                        desc += `createtime(<span class="red_highlight">GMT+8</span>): ${value}\n`;
                     } else {
                         desc += `${index}: ${value}\n`;
                     }
@@ -5357,10 +5347,14 @@ function GemsAlertHandler(...kwargs) {
 }
 
 function NoLogAlertHandler(...kwargs) {
-    const { summary } = kwargs[0];
+    let { summary } = kwargs[0];
     function generateDescription() {
         let alertDescriptions = '';
-        alertDescriptions += `Observed ${summary.split(']')[1]}\n`;
+        if (summary.includes(']')) {
+            alertDescriptions += `Observed ${summary.split(']')[1]}\n`;
+        } else {
+            alertDescriptions += `Observed ${summary}\n`;
+        }
         let log_source = $('#customfield_10204-val').text().trim();
         if (log_source.includes('Hide')) {
             console.log('===', log_source.split(' '));
@@ -5775,7 +5769,7 @@ function RealTimeMonitoring() {
             const handlers = {
                 'cortex-xdr-json': cortexAlertHandler,
                 'mde-api-json': MDE365AlertHandler,
-                'sangfor-ccom-json': HTSCAlertHandler,
+                'sangfor-ccom-json': CheckPointEmailHandler,
                 'windows_eventchannel': WineventAlertHandler,
                 'fortigate-firewall-v5': FortigateAlertHandler,
                 'crowdstrike_cef': CSAlertHandler,
@@ -5824,7 +5818,8 @@ function RealTimeMonitoring() {
                 'cloudflare-json': GoogleAlertHandler,
                 'bigdata-hdfs-cef': CheckPointEmailHandler,
                 'bigdata-hive-cef': CheckPointEmailHandler,
-                'arista_cef': SangforAlertHandler
+                'arista_cef': SangforAlertHandler,
+                'networkbox': SangforAlertHandler
             };
             let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
             if (DecoderName == '') {
