@@ -5381,12 +5381,11 @@ function NoLogAlertHandler(...kwargs) {
     addButton('generateDescription', 'Description', generateDescription);
 }
 
-function LLA_CS_AlertHandler(DecoderName) {
+function LLA_CS_AlertHandler(DecoderName, logsourcedomain) {
     let ORG = $('#customfield_10002-val').text().trim();
-    console.log(ORG.split(' ')[ORG.split(' ').length - 1]);
+    let Org_none = ORG.split(' ')[ORG.split(' ').length - 1] == 'None';
     const elements = document.querySelectorAll('.user-hover.user-avatar');
     const userList = ['kitty li', 'anson cho', 'ray tan', 'philip ng'];
-    console.log(elements[0].textContent.toLowerCase()); // 对每个元素执行操作
     let ClientComment = false;
     for (const dataItem of userList) {
         if (elements[0].textContent.toLowerCase().includes(dataItem.toLowerCase())) {
@@ -5394,10 +5393,18 @@ function LLA_CS_AlertHandler(DecoderName) {
             break;
         }
     }
+
+    let summary = $('#summary-val').text().trim();
     //判断工单是否升级，
-    if (ORG.split(' ')[ORG.split(' ').length - 1] == 'None' && DecoderName == 'crowdstrike_cef') {
+    if (Org_none && DecoderName == 'crowdstrike_cef') {
         $('#opsbar-opsbar-transitions').on('click', () => {
-            let userConfirmed = confirm('LHG的所有 Crowdstrike 告警均需要升级，即使是误报也需要升级');
+            let userConfirmed = confirm(
+                `${logsourcedomain.toUpperCase()}的所有 Crowdstrike 告警均需要升级，即使是误报也需要升级`
+            );
+        });
+    } else if (Org_none && summary.toLowerCase().includes('checkpoint harmony')) {
+        $('#opsbar-opsbar-transitions').on('click', () => {
+            confirm(`${logsourcedomain.toUpperCase()}的所有 Checkpoint Harmony 告警均需要升级，即使是误报也需要升级`);
         });
     } else {
         if (!ClientComment) {
@@ -5600,8 +5607,9 @@ function MonitorDev() {
 function MonitorOrgEscalate() {
     var LogSourceDomain = $('#customfield_10223-val').text().trim().toLowerCase();
     let cachedLogsourcedomainOorg = GM_getValue('cachedLogsourcedomainOorg', null);
+    let cachedMappingContent = GM_getValue('cachedMappingContent', null);
 
-    function verify() {
+    function Verify_escalate(cachedLogsourcedomainOorg) {
         let get_pass = true;
         var org = document.getElementById('customfield_10002-multi-select');
         for (const c of cachedLogsourcedomainOorg) {
@@ -5627,13 +5635,39 @@ function MonitorOrgEscalate() {
         }
         return get_pass;
     }
+    let summary = $('#summary-val').text().trim().toLowerCase();
+    let LogSource = $('#customfield_10204-val').text().trim().toLowerCase();
 
-    function bindEditIssueButton() {
-        var btn = document.getElementById('edit-issue-submit');
-        if (btn && !btn.dataset.bound) {
-            btn.dataset.bound = 'true'; // 添加标记，避免重复绑定事件
-            btn.addEventListener('click', function (event) {
-                let get_pass = verify(cachedLogsourcedomainOorg);
+    function Verify_reportedDev(cachedMappingContent) {
+        const dev_scope = JSON.parse(cachedMappingContent['dev_scope']);
+        console.log('===', dev_scope);
+        for (const d of dev_scope) {
+            const report_dev = JSON.parse(cachedMappingContent['report_dev']);
+            for (const r of report_dev) {
+                if (summary.includes(d.toLowerCase()) && LogSource.includes(r.toLowerCase())) {
+                    $('#opsbar-opsbar-transitions').on('click', () => {
+                        confirm(
+                            `该工单logsource可能包含${cachedMappingContent['report_dev']},先与INFRA/DEV团队确认,不得直接升级`
+                        );
+                    });
+                    $('#edit-issue').on('click', () => {
+                        let userConfirmed = confirm(
+                            `该工单logsource可能包含${cachedMappingContent['report_dev']},先与INFRA/DEV团队确认,不得直接升级`
+                        );
+                    });
+                }
+            }
+        }
+    }
+    Verify_reportedDev(cachedMappingContent);
+
+    const timer_update = setInterval(function () {
+        var btn_update = document.getElementById('edit-issue-submit');
+        if (btn_update && !btn_update.dataset.bound) {
+            clearInterval(timer_update);
+            btn_update.dataset.bound = 'true'; // 添加标记，避免重复绑定事件
+            btn_update.addEventListener('click', function (event) {
+                let get_pass = Verify_escalate(cachedLogsourcedomainOorg);
                 console.log('===get_pass', get_pass);
                 if (get_pass) {
                     console.log('===binggo');
@@ -5645,9 +5679,6 @@ function MonitorOrgEscalate() {
                 }
             });
         }
-    }
-    setInterval(function () {
-        bindEditIssueButton(); // 每秒检查一次元素是否未绑定
     }, 1000);
 }
 
@@ -5984,7 +6015,7 @@ function RealTimeMonitoring() {
         }
         const cachedMappingContent = GM_getValue('cachedMappingContent', null);
         if (LogSourceDomain.includes(cachedMappingContent['lla'])) {
-            LLA_CS_AlertHandler(DecoderName);
+            LLA_CS_AlertHandler(DecoderName, cachedMappingContent['lla']);
         }
         if (LogSourceDomain.includes(cachedMappingContent['gga'])) {
             GGA_AlertHandler();
