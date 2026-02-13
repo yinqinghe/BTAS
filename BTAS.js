@@ -5275,12 +5275,20 @@ function GemsAlertHandler(...kwargs) {
                 }
                 if (DecoderName == 'kes') {
                     let lines = log.split(/\\r?\\n/);
+                    let host_info = '';
                     if (lines[0].includes(' - ')) {
                         console.log('===', lines[0]);
+                        const match = lines[0].match(/hdn="([^"]+)"\s+hip="([^"]+)"/);
+                        if (match) {
+                            console.log('hdn:', match[1]);
+                            console.log('hip:', match[2]);
+                            host_info = `\nHostDnsName:${match[1]}\nHostIp:${match[2]}\n`;
+                        }
                         lines[0] = lines[0].split(' - ')[0];
                     }
-                    console.log('===', lines);
+                    console.log('===lines', lines);
                     let res = lines.join('\n');
+                    res += host_info;
                     acc.push(res);
                 } else {
                     let gems = JSON.parse(log)['gems2'];
