@@ -449,10 +449,8 @@ function QuickReply() {
         <aui-item-radio interactive>Leaked Credentials</aui-item-radio>
 		<aui-item-radio interactive>Compromised Accounts</aui-item-radio>
 		<aui-item-radio interactive>Log resume</aui-item-radio>
-		<aui-item-radio interactive>关闭工单</aui-item-radio> 
-		<aui-item-radio interactive>Haeco high severity</aui-item-radio>
-        <aui-item-radio interactive>Haeco medium severity</aui-item-radio>
-        <aui-item-radio interactive>Haeco low severity</aui-item-radio>
+		<aui-item-radio interactive>关闭工单</aui-item-radio>
+		<aui-item-radio interactive>通知相关方</aui-item-radio> 
     </aui-section>
     </aui-dropdown-menu>`;
     const commentBar = $($('.aui-toolbar2-primary')[1]);
@@ -470,12 +468,6 @@ function QuickReply() {
             'Dear Customer,<br>If the activity is legitimate. Can we add the ticket to white list?<br>Best Regards.',
         'Whitelist Done':
             'Dear Customer,<br>We have informed the relevant parties to add this ticket to the white list and will close this ticket<br>Best Regards.',
-        'Haeco high severity':
-            '<h2><strong><span style="color: red;" data-mce-style="color: red;"><samp>[The ticket is escalated to High Severity]</samp></span></strong></h2><br>',
-        'Haeco medium severity':
-            '<h2><span style="color: rgb(255, 171, 0);" data-mce-style="color: #ffab00;"><strong><samp>[The ticket is escalated to Medium Severity]</samp></strong></span></h2><br>',
-        'Haeco low severity':
-            '<h2><span style="color: rgb(76, 154, 255);" data-mce-style="color: #4c9aff;"><strong><samp>[The ticket is de-escalated to Low Severity]</samp></strong></span></h2><br>',
         'Leaked Credentials':
             '<p>Dear Client,</p><p>Our Cyber Threat Intelligence investigated the incident and found &lt;Number&gt; leaked credentials related to your organization exposed in dark web. The credentials are listed below:</p><table width="962" class="mce-item-table"><tbody><tr><td width="137"><div><p><strong>EMAIL/USERNAME</strong></p></div></td><td width="137"><div><p><strong>PASSWORD TYPE</strong></p></div></td><td width="137"><div><p><strong>PASSWORD</strong></p></div></td><td width="137"><div><p><strong>SOURCE</strong></p></div></td><td width="137"><div><p><strong>PRICE</strong></p></div></td><td width="137"><div><p><strong>POSTED DATE</strong></p></div></td><td width="137"><div><p><strong>SERVICE</strong></p></div></td></tr><tr><td width="137"><br data-mce-bogus="1"></td><td width="137"><br data-mce-bogus="1"></td><td width="137"><br data-mce-bogus="1"></td><td width="137"><br data-mce-bogus="1"></td><td width="137"><br data-mce-bogus="1"></td><td width="137"><br data-mce-bogus="1"></td><td width="137"><br data-mce-bogus="1"></td></tr></tbody></table><p>[Source Detail from Kela]</p><p>&lt;SOURCE Details/Description&gt;</p><p>[Service if disclose need check]</p><p>As per our open-source investigation through passive means, we observe that:</p><p>&lt; SERVICE&gt; appear to be &lt;SERVICE USAGE&gt;</p><p>[Recommendation]</p><p>We recommend confirming that the service coverage is to customers only, or whether it also includes staff and/or third-party, and evaluate if accounts with administrative privileges require a password change. &nbsp;We also recommend to heighten monitoring of customer login to indicate anomalies in location or timing, and review password policies and evaluate if there is a need to strengthen (e.g., mandate password rotation regularly). A further recommendation is to reach out to these account holders if the accounts are still active, and request that they change their passwords.</p><p>Please do not hesitate to reach out to us if you have any queries. Thank you.</p><p>Best Regards,<br>Cyber Threat Intelligence Team</p>',
         'Compromised Accounts':
@@ -484,7 +476,8 @@ function QuickReply() {
             'Dear Customer,<br>Thanks for your reply, <br>Log resumed, we will close this ticket.<br>Best Regards.',
         'Agent recover':
             'Dear Customer,<br>Thanks for your reply,<br>The agent is now active and we will close this case<br>Best Regards.',
-        '关闭工单': '尊敬的客户，<br>感谢您的回复，我们将关闭此工单。 <br>祝您生活愉快。<br>'
+        '关闭工单': '尊敬的客户，<br>感谢您的回复，我们将关闭此工单。 <br>祝您生活愉快。<br>',
+        '通知相关方': '尊敬的客户，<br>我们已通知相关方，如有更新会及时通知。<br>祝您生活愉快。<br>'
     };
 
     // Check local storage at initialization time
@@ -5107,18 +5100,37 @@ function GoogleAlertHandler(...kwargs) {
                     return acc;
                 }
                 if (DecoderName == 'google-api-json') {
-                    let alert = JSON.parse(log)['alerts'];
-                    let data = alert['data']['ruleViolationInfo'];
-                    let result = {
-                        createtime: alert.createTime ? alert.createTime.split('.')[0] : undefined,
-                        trigger: data.trigger ? data.trigger : undefined,
-                        dataSource: data.dataSource ? data.dataSource : undefined,
-                        recipients: data.recipients ? JSON.stringify(data.recipients) : undefined,
-                        resourceInfo: data.resourceInfo ? JSON.stringify(data.resourceInfo) : undefined,
-                        securityLink: alert.securityInvestigationToolLink
-                            ? alert.securityInvestigationToolLink
-                            : undefined
-                    };
+                    let log_ = JSON.parse(log);
+                    let result;
+                    if (log_.hasOwnProperty('reports')) {
+                        let report = log_['reports'];
+                        const dict = report.events.parameters.reduce((acc, item) => {
+                            acc[item.name] = item.value;
+                            return acc;
+                        }, {});
+                        result = {
+                            createtime: report.id.time ? report.id.time.split('.')[0] : undefined,
+                            actor: report.actor.email ? report.actor.email : undefined,
+                            ipAddress: report.ipAddress ? report.ipAddress : undefined,
+                            events_name: report.events.name ? report.events.name : undefined,
+                            USER_EMAIL: dict.USER_EMAIL ? dict.USER_EMAIL : undefined,
+                            ROLE_NAME: dict.ROLE_NAME ? dict.ROLE_NAME : undefined
+                        };
+                    } else {
+                        let alert = log_['alerts'];
+                        let data = alert['data']['ruleViolationInfo'];
+                        result = {
+                            createtime: alert.createTime ? alert.createTime.split('.')[0] : undefined,
+                            trigger: data.trigger ? data.trigger : undefined,
+                            dataSource: data.dataSource ? data.dataSource : undefined,
+                            recipients: data.recipients ? JSON.stringify(data.recipients) : undefined,
+                            resourceInfo: data.resourceInfo ? JSON.stringify(data.resourceInfo) : undefined,
+                            securityLink: alert.securityInvestigationToolLink
+                                ? alert.securityInvestigationToolLink
+                                : undefined
+                        };
+                    }
+
                     acc.push(result);
                 }
                 if (DecoderName == 'cloudflare-json') {
