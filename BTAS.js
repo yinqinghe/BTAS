@@ -185,16 +185,35 @@ function addCss() {
     }
     function CollapsedAll() {
         const ids = ['field-customfield_10308', 'field-customfield_10219', 'field-customfield_10216'];
+        const hasExpanded = ids.some((id) => {
+            const el = document.getElementById(id);
+            return el && el.classList.contains('expanded');
+        });
+        console.log('===hit');
+
         ids.forEach((id) => {
             const el = document.getElementById(id);
             if (!el) {
                 console.warn(`未找到元素：${id}`);
                 return;
             }
-            if (el.classList.contains('expanded')) {
-                console.log(`${id} 当前是展开状态，执行收起`);
-                const twixi = el.querySelector('.twixi');
-                twixi.click(); // 模拟点击收起
+
+            const twixi = el.querySelector('.twixi');
+            if (!twixi) {
+                console.warn(`${id} 未找到 .twixi`);
+                return;
+            }
+
+            if (hasExpanded) {
+                // 如果有展开的 → 全部收起
+                if (el.classList.contains('expanded')) {
+                    twixi.click();
+                }
+            } else {
+                // 如果全部是收起的 → 全部展开
+                if (!el.classList.contains('expanded')) {
+                    twixi.click();
+                }
             }
         });
         const btns = [
@@ -202,15 +221,27 @@ function addCss() {
             'button[aria-label="Attachments"]',
             'button[aria-label="Activity"]'
         ];
+        const hasExpanded_btns = btns.some((selector) => {
+            const el = document.querySelector(selector);
+            return el && el.getAttribute('aria-expanded') === 'true';
+        });
+
         btns.forEach((btn) => {
             const el = document.querySelector(btn);
-            // console.log('===', el);
-            if (el) {
-                const expanded = el.getAttribute('aria-expanded') === 'true';
+            if (!el) return;
+
+            const expanded = el.getAttribute('aria-expanded') === 'true';
+
+            if (hasExpanded_btns) {
+                // 如果存在展开的 → 全部收起
                 if (expanded) {
-                    el.click(); // 仅在未展开时点击
+                    el.click();
                 }
-                console.log('当前状态:', expanded ? '已展开' : '未展开');
+            } else {
+                // 如果全部收起 → 全部展开
+                if (!expanded) {
+                    el.click();
+                }
             }
         });
     }
@@ -1611,7 +1642,8 @@ function FortigateAlertHandler(...kwargs) {
                 ref,
                 policyname,
                 filename,
-                ip
+                ip,
+                app
             } = alertInfo;
             let arr = [];
             if (summary.toLowerCase().includes('infected file detected in fortigate')) {
@@ -1661,7 +1693,8 @@ function FortigateAlertHandler(...kwargs) {
                 to,
                 remip: remip,
                 VT: arr.length > 0 ? arr : undefined,
-                ref: ref || undefined
+                ref: ref || undefined,
+                app_name: app
             };
             acc.push(extract_alert_info);
             return acc;
@@ -5661,21 +5694,19 @@ function MonitorOrgEscalate() {
     function Verify_reportedDev(cachedMappingContent) {
         const dev_scope = JSON.parse(cachedMappingContent['dev_scope']);
         console.log('===', dev_scope);
-        for (const d of dev_scope) {
-            const report_dev = JSON.parse(cachedMappingContent['report_dev']);
-            for (const r of report_dev) {
-                if (summary.includes(d.toLowerCase()) && LogSource.includes(r.toLowerCase())) {
-                    $('#opsbar-opsbar-transitions').on('click', () => {
-                        confirm(
-                            `该工单logsource可能包含${cachedMappingContent['report_dev']},先与INFRA/DEV团队确认,不得直接升级`
-                        );
-                    });
-                    $('#edit-issue').on('click', () => {
-                        let userConfirmed = confirm(
-                            `该工单logsource可能包含${cachedMappingContent['report_dev']},先与INFRA/DEV团队确认,不得直接升级`
-                        );
-                    });
-                }
+        const report_dev = JSON.parse(cachedMappingContent['report_dev']);
+        for (const r of report_dev) {
+            if (!summary.includes('agent disconnected') && LogSource.includes(r.toLowerCase())) {
+                $('#opsbar-opsbar-transitions').on('click', () => {
+                    confirm(
+                        `该工单logsource可能包含${cachedMappingContent['report_dev']},(除Agent Disconnected告警)先与INFRA/DEV团队确认,不得直接升级`
+                    );
+                });
+                $('#edit-issue').on('click', () => {
+                    let userConfirmed = confirm(
+                        `该工单logsource可能包含${cachedMappingContent['report_dev']},(除Agent Disconnected告警)先与INFRA/DEV团队确认,不得直接升级`
+                    );
+                });
             }
         }
     }
@@ -5914,7 +5945,8 @@ function RealTimeMonitoring() {
                 'potential port scan (local to local)': FortigateAlertHandler,
                 'users failed logon to the same host in 15 mins': WineventAlertHandler,
                 'multiple authentication failures (windows)': WineventAlertHandler,
-                'incoming admin protocol used': FortigateAlertHandler
+                'incoming admin protocol used': FortigateAlertHandler,
+                'abnormally large outgoing accept traffic': FortigateAlertHandler
             };
             let No_Decoder_handler = null;
             Object.keys(No_Decoder_handlers).forEach((key) => {
