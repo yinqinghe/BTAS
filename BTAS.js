@@ -229,9 +229,7 @@ function addCss() {
         btns.forEach((btn) => {
             const el = document.querySelector(btn);
             if (!el) return;
-
             const expanded = el.getAttribute('aria-expanded') === 'true';
-
             if (hasExpanded_btns) {
                 // 如果存在展开的 → 全部收起
                 if (expanded) {
@@ -3550,13 +3548,19 @@ function SangforAlertHandler(...kwargs) {
                     data_json['vt'] = `<a href="${vt_domain}">${vt_domain}</a>`;
                     acc.push(data_json);
                 } else if (DecoderName == 'checkpoint_cef') {
+                    let createtime = formatCurrentDateTime(Number(matches.creation_time) * 1000, 'checkpoint_cef');
+                    console.log('===', createtime);
                     let data_json = {
+                        createtime: createtime,
                         Signature: matches.Signature ? matches.Signature : undefined,
                         cp_severity: matches.cp_severity ? matches.cp_severity : undefined,
                         src: matches.src ? matches.src : undefined,
                         dst: matches.dst ? matches.dst : undefined,
                         act: matches.act ? matches.act : undefined,
-                        origin: matches.origin ? matches.origin : undefined
+                        origin: matches.origin ? matches.origin : undefined,
+                        product: matches.product ? matches.product : undefined,
+                        inzone: matches.inzone ? matches.inzone : undefined,
+                        outzone: matches.outzone ? matches.outzone : undefined
                     };
                     data_json[matches.cs2Label] = matches.cs2 ? matches.cs2 : undefined;
                     data_json[matches.cs3Label] = matches.cs3 ? matches.cs3 : undefined;
@@ -3698,7 +3702,7 @@ function SangforAlertHandler(...kwargs) {
             const lastindex = summary.lastIndexOf(']');
             let desc = '';
             if (summary.includes('-')) {
-                desc += `Observed ${summary.substr(lastindex + 1).split('-')[1]}\n`;
+                desc += `Observed ${summary.substring(summary.indexOf('-', lastindex) + 1).trim()}\n`;
             } else {
                 desc += `Observed ${summary.substr(lastindex + 1)}\n`;
             }
@@ -4868,10 +4872,15 @@ function CheckPointEmailHandler(...kwargs) {
                         attackType: result.tag,
                         hostRisk: result.hostRisk,
                         srcIP: result.src_ip,
+                        attack_ip: result.attack_ip,
+                        attack_type_name: result.attack_type_name,
                         eventEvidence,
                         hostName: result.hostName,
                         dstIP: result.dst_ip,
-                        solution: result.solution
+                        suffer_ip: result.suffer_ip,
+                        solution: result.solution,
+                        analyze_suggest: result.analyze_suggest,
+                        suggest: result.suggest
                     };
                     acc.push(data_json);
                     raw_alert += 1;
@@ -5319,10 +5328,9 @@ function GemsAlertHandler(...kwargs) {
                     return acc;
                 }
                 if (DecoderName == 'kes') {
-                    let lines = log.split(/\\r?\\n/);
+                    let lines = log.split(/\\r\\n/);
                     let host_info = '';
                     if (lines[0].includes(' - ')) {
-                        console.log('===', lines[0]);
                         const match = lines[0].match(/hdn="([^"]+)"\s+hip="([^"]+)"/);
                         if (match) {
                             console.log('hdn:', match[1]);
@@ -5559,7 +5567,7 @@ function formatCurrentDateTime(dateStr, decoder_name) {
     if (dateStr) {
         var date = new Date(dateStr);
         var localOffset = date.getTimezoneOffset();
-        if (decoder_name == 'impervainc_cef') {
+        if (decoder_name == 'impervainc_cef' || decoder_name == 'checkpoint_cef') {
             var targetDate = new Date(date.getTime() + (480 + localOffset) * 60000);
         } else {
             var targetDate = new Date(date.getTime() + (960 + localOffset) * 60000);
