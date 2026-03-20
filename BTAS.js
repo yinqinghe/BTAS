@@ -33,6 +33,7 @@
 // ==/UserScript==
 
 var $ = window.jQuery;
+const cachedMappingContent = GM_getValue('cachedMappingContent', null);
 
 /**
  * This function creates and displays a flag using AJS.flag function
@@ -1641,7 +1642,12 @@ function FortigateAlertHandler(...kwargs) {
                 policyname,
                 filename,
                 ip,
-                app
+                app,
+                status,
+                userip,
+                level,
+                logdesc,
+                reason
             } = alertInfo;
             let arr = [];
             if (summary.toLowerCase().includes('infected file detected in fortigate')) {
@@ -1671,18 +1677,22 @@ function FortigateAlertHandler(...kwargs) {
                 ref = `<a href="${ref}">${ref}</a>`;
             }
             const extract_alert_info = {
-                datetime: `${date} ${time}`,
+                datetime: date ? `${date} ${time}` : undefined,
                 srcip: srcip ? `${srcip}:${srcport}[${srccountry}]` : undefined,
                 dstip: dstip ? `${dstip}:${dstport}[${dstcountry}]` : undefined,
                 hostname: hostname,
                 devname: devname,
                 user: user,
+                userip: userip,
                 ip,
                 url: url,
                 filename: filename,
                 action: action,
+                status: status,
                 cfgattr: cfgattr,
+                logdesc: logdesc,
                 msg: msg,
+                reason: reason,
                 policyname: policyname,
                 referralurl: referralurl,
                 forwardedfor: forwardedfor || undefined,
@@ -1692,7 +1702,8 @@ function FortigateAlertHandler(...kwargs) {
                 remip: remip,
                 VT: arr.length > 0 ? arr : undefined,
                 ref: ref || undefined,
-                app_name: app
+                app_name: app,
+                level: level
             };
             acc.push(extract_alert_info);
             return acc;
@@ -3297,7 +3308,6 @@ function DarktraceAlertHandler(...kwargs) {
             try {
                 const BraceIndex = log.toString().indexOf('{');
                 const lastBraceIndex = log.toString().lastIndexOf('}');
-                const logarray = log.toString().split(' ');
                 if (BraceIndex !== -1) {
                     raw_alert += 1;
                     // Intercepts a substring from the beginning of the brace to the end of the string
@@ -3306,18 +3316,12 @@ function DarktraceAlertHandler(...kwargs) {
                     let alertExtraInfo = {},
                         Resource_paths = [];
                     breach_Url = json_alert['breachUrl'] + '<br>' + json_alert['incidentEventUrl'];
-                    let year = ' 20' + $('#created-val').text().trim().split('/')[2].split(' ')[0]; //动态产生工单的年份
-                    let time_str = logarray.slice(0, 3).join(' ') + year;
-                    if (!time_str.includes(':')) {
-                        time_str = logarray.slice(0, 4).join(' ').replace('  ', ' ') + year;
-                    }
-
                     if (json_alert.hasOwnProperty('model')) {
                         const { device, triggeredComponents, model } = json_alert;
                         let User_agent = '',
                             Message;
                         alertExtraInfo = {
-                            AlertTime: formatCurrentDateTime(time_str),
+                            AlertTime: formatCurrentDateTime(json_alert.creationTime, 'darktrace-json'),
                             hostname: device?.hostname ? device?.hostname : undefined,
                             ip: device?.ip ? device?.ip : undefined,
                             credentials: device?.credentials ? device?.credentials : undefined,
@@ -3349,7 +3353,7 @@ function DarktraceAlertHandler(...kwargs) {
                         const { summary, breachDevices, details } = json_alert;
                         let values;
                         alertExtraInfo = {
-                            AlertTime: formatCurrentDateTime(time_str),
+                            AlertTime: formatCurrentDateTime(json_alert.createdAt, 'darktrace-json'),
                             hostname: breachDevices[0]?.hostname ? breachDevices[0]?.hostname : undefined,
                             host_ip: breachDevices[0]?.ip ? breachDevices[0]?.ip : undefined,
                             summary: summary ? summary : undefined
@@ -5567,7 +5571,7 @@ function formatCurrentDateTime(dateStr, decoder_name) {
     if (dateStr) {
         var date = new Date(dateStr);
         var localOffset = date.getTimezoneOffset();
-        if (decoder_name == 'impervainc_cef' || decoder_name == 'checkpoint_cef') {
+        if (decoder_name == 'impervainc_cef' || decoder_name == 'checkpoint_cef' || decoder_name == 'darktrace-json') {
             var targetDate = new Date(date.getTime() + (480 + localOffset) * 60000);
         } else {
             var targetDate = new Date(date.getTime() + (960 + localOffset) * 60000);
@@ -5954,7 +5958,8 @@ function RealTimeMonitoring() {
                 'users failed logon to the same host in 15 mins': WineventAlertHandler,
                 'multiple authentication failures (windows)': WineventAlertHandler,
                 'incoming admin protocol used': FortigateAlertHandler,
-                'abnormally large outgoing accept traffic': FortigateAlertHandler
+                'abnormally large outgoing accept traffic': FortigateAlertHandler,
+                'windows multiple accounts lockout within a short period': WineventAlertHandler
             };
             let No_Decoder_handler = null;
             Object.keys(No_Decoder_handlers).forEach((key) => {
@@ -5962,6 +5967,14 @@ function RealTimeMonitoring() {
                     No_Decoder_handler = No_Decoder_handlers[key];
                 }
             });
+            if (No_Decoder_handler == null) {
+                if (
+                    summary.toLowerCase().includes('multiple authentication failures') &&
+                    LogSourceDomain == cachedMappingContent['aaa']
+                ) {
+                    No_Decoder_handler = FortigateAlertHandler;
+                }
+            }
             if (No_Decoder_handler !== null) {
                 No_Decoder_handler({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: summary });
             }
