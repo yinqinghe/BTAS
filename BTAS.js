@@ -34,6 +34,7 @@
 
 var $ = window.jQuery;
 const cachedMappingContent = GM_getValue('cachedMappingContent', null);
+const summary = $('#summary-val').text().trim();
 
 /**
  * This function creates and displays a flag using AJS.flag function
@@ -372,9 +373,12 @@ function registerSearchMenu() {
     const Host = function () {
         let search = {
             'Source IP(s) and Hostname(s)': $('#customfield_10206-val').text().trim(),
-            'Destination IP(s) and Hostname(s)': $('#customfield_10208-val').text().trim()
+            'Destination IP(s) and Hostname(s)': $('#customfield_10208-val').text().trim(),
+            'Hostname(s)': $('#customfield_16700-val').text().trim()
         };
-        if (search['Source IP(s) and Hostname(s)']) {
+        if (summary.toLowerCase().includes('cortex xdr')) {
+            return `AND 'Hostname(s)' ~ '${search['Hostname(s)']}'`;
+        } else if (search['Source IP(s) and Hostname(s)']) {
             return `AND 'Source IP(s) and Hostname(s)' ~ '${search['Source IP(s) and Hostname(s)']}'`;
         } else if (search['Destination IP(s) and Hostname(s)']) {
             return `AND 'Destination IP(s) and Hostname(s)' ~ '${search['Destination IP(s) and Hostname(s)']}'`;
@@ -588,7 +592,6 @@ function jsonToTree(data) {
 }
 
 function ToWhitelist() {
-    const summary = $('#summary-val').text().trim();
     var LogSourceDomain = $('#customfield_10223-val').text().trim();
     let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
     let Component = 'Wazuh';
@@ -4427,8 +4430,6 @@ function WebAccesslogAlertHandler(...kwargs) {
                 if (log.length == 0) {
                     return acc;
                 }
-                console.log('===', log);
-
                 if (
                     !summary.toLowerCase().includes('higher than allowed on most browsers. possible attack.') &&
                     !log.includes('DEBUG:')
@@ -4451,25 +4452,35 @@ function WebAccesslogAlertHandler(...kwargs) {
                     let logArray = log.split(' ').filter((item) => item !== ''); //Remove extra whitespace from the string
                     console.log(logArray);
                     if (logArray[8].includes(':')) {
-                        const regex =
-                            /(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(\w+)\s+(\S+)\s+(\S+)\s+(\S+:\d+)\s+-\s+\[([^\]]+)\]\s+"(GET|POST)\s+(.+?)\s+HTTP\/1\.1"\s+(\d{3})\s+(\d+)\s+"([^"]*)"\s+"([^"]+)"/;
+                        if (log.includes('nginx-access')) {
+                            const regex =
+                                /^(?<syslog_time>\w{3}\s+\d+\s[\d:]+)\s(?<hostname>\S+)\s(?<app>\S+)\s(?<ip>\d{1,3}(?:\.\d{1,3}){3})\s-\s-\s\[(?<time>[^\]]+)\]\s"(?<method>\S+)\s(?<path>\S+)\s(?<proto>[^"]+)"\s(?<status>\d{3})\s(?<bytes>\d+)\s"(?<referer>[^"]*)"\s"(?<ua>[^"]*)"/;
+                            const match = log.match(regex);
+                            if (match) {
+                                console.log(match.groups);
+                                acc.push(match.groups);
+                            }
+                        } else {
+                            const regex =
+                                /(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(\w+)\s+(\S+)\s+(\S+)\s+(\S+:\d+)\s+-\s+\[([^\]]+)\]\s+"(GET|POST)\s+(.+?)\s+HTTP\/1\.1"\s+(\d{3})\s+(\d+)\s+"([^"]*)"\s+"([^"]+)"/;
 
-                        const match = log.match(regex);
-                        if (match) {
-                            acc.push({
-                                timestamp: match[1], // 日志时间
-                                hostname: match[2], // 主机名
-                                logType: match[3], // 日志类型（如 vami-access）
-                                sourceIp: match[4], // 来源 IP
-                                targetIpPort: match[5], // 目标 IP 和端口
-                                requestTime: match[6], // 请求时间戳
-                                method: match[7], // 请求方法
-                                url: match[8], // 请求 URL
-                                statusCode: match[9], // 状态码
-                                bytes: match[10], // 响应字节数
-                                referrer: match[11], // 引用来源
-                                userAgent: match[12] // 用户代理
-                            });
+                            const match = log.match(regex);
+                            if (match) {
+                                acc.push({
+                                    timestamp: match[1], // 日志时间
+                                    hostname: match[2], // 主机名
+                                    logType: match[3], // 日志类型（如 vami-access）
+                                    sourceIp: match[4], // 来源 IP
+                                    targetIpPort: match[5], // 目标 IP 和端口
+                                    requestTime: match[6], // 请求时间戳
+                                    method: match[7], // 请求方法
+                                    url: match[8], // 请求 URL
+                                    statusCode: match[9], // 状态码
+                                    bytes: match[10], // 响应字节数
+                                    referrer: match[11], // 引用来源
+                                    userAgent: match[12] // 用户代理
+                                });
+                            }
                         }
                     } else {
                         if (DecoderName == 'web-accesslog-iis-default') {
@@ -4525,31 +4536,39 @@ function WebAccesslogAlertHandler(...kwargs) {
                     const regex2 =
                         /(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\+\d{4})\s+\[([^\]]+)\]\s+"([^"]+)"\s+-\s+-\s+\[([^\]]+)\]\s+"(GET|POST)\s+(.+?)\s+HTTP\/1\.1"\s+(\d{3})\s+(\d+)\s+"([^"]*)"\s+"([^"]+)"/g;
 
+                    // 针对 regex1 (假设只匹配一次)
                     const match1 = log.match(regex1);
                     if (match1) {
-                        acc.push({
-                            timestamp: match1[1],
-                            host: match1[2],
-                            url: match1[3],
-                            statusCode: match1[4],
-                            bytes: match1[5],
-                            referrer: match1[6],
-                            userAgent: match1[7]
-                        });
+                        const [, timestamp, host, url, statusCode, bytes, referrer, userAgent] = match1;
+                        acc.push({ timestamp, host, url, statusCode, bytes, referrer, userAgent });
                     }
-                    let match2;
-                    while ((match2 = regex2.exec(log)) !== null) {
+
+                    // 针对 regex2 (多行匹配)
+                    for (const match of log.matchAll(regex2)) {
+                        const [
+                            ,
+                            timestamp,
+                            identifier,
+                            ip,
+                            logTime,
+                            method,
+                            url,
+                            statusCode,
+                            bytes,
+                            referrer,
+                            userAgent
+                        ] = match;
                         acc.push({
-                            timestamp: match2[1],
-                            identifier: match2[2],
-                            ip: match2[3],
-                            logTime: match2[4],
-                            method: match2[5],
-                            url: match2[6],
-                            statusCode: match2[7],
-                            bytes: match2[8],
-                            referrer: match2[9],
-                            userAgent: match2[10]
+                            timestamp,
+                            identifier,
+                            ip,
+                            logTime,
+                            method,
+                            url,
+                            statusCode,
+                            bytes,
+                            referrer,
+                            userAgent
                         });
                     }
                 }
@@ -5181,6 +5200,7 @@ function GoogleAlertHandler(...kwargs) {
                 }
                 if (DecoderName == 'cloudflare-json') {
                     let alert = JSON.parse(log)['cloudflare'];
+                    alert['time'] = formatCurrentDateTime(alert['EdgeStartTimestamp'] / 1000000, DecoderName);
                     alert = Object.fromEntries(
                         Object.entries(alert).filter(([key, value]) => {
                             if (key.includes('stamp')) return false;
@@ -5200,7 +5220,6 @@ function GoogleAlertHandler(...kwargs) {
                         decodeURIComponent(alert['ClientRequestURI'].replace(/\+/g, ' '))
                     );
                     acc.push(alert);
-
                     console.log('===', alert);
                 }
 
@@ -5411,6 +5430,88 @@ function GemsAlertHandler(...kwargs) {
     addButton('generateDescription', 'Description', generateDescription);
 }
 
+function SplunkAlertHandler(...kwargs) {
+    const { rawLog, summary, DecoderName } = kwargs[0];
+    var raw_alert = 0;
+    function parseLog(rawLog) {
+        const alertInfo = rawLog.reduce((acc, log) => {
+            try {
+                if (log.length == 0) {
+                    return acc;
+                }
+                const cleanLog = log.replace(/\u00A0/g, ' ');
+                const patterns = {
+                    time: /identifiedAt\s*:\s*(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/,
+                    agentComputerName: /agentComputerName\s*:\s*([\w-]+)/,
+                    processUser: /processUser\s*:\s*([^,]+)/,
+                    threat: /description\s*:\s*([^,]+)/,
+                    originator: /originatorProcess\s*:\s*([\w.]+)/,
+                    cmd: /maliciousProcessArguments\s*:\s*([^,]+)/,
+                    filePath: /filePath\s*:\s*([^,]+)/,
+                    sha256: /sha256\s*:\s*([a-f0-9]{64})/,
+                    mitigationStatus: /mitigationStatusDescription\s*:\s*([^,]+)/
+                };
+
+                let result = {};
+
+                const allIps = cleanLog.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g);
+                // 去重：利用 Set 去掉重复提取的 IP
+                result.agentIpV4s = allIps ? [...new Set(allIps)] : [];
+
+                const primaryIpMatch = cleanLog.match(/agentIpV4\s*:\s*([\d.]+)/);
+                result.agentprimaryIp = primaryIpMatch ? primaryIpMatch[1] : 'Not Found';
+
+                for (let key in patterns) {
+                    const match = cleanLog.match(patterns[key]);
+                    if (match) {
+                        let value = match[1].trim().replace(/^["']|["']$/g, '');
+                        result[key] = key === 'time' ? `${value}Z` : value;
+                    } else {
+                        result[key] = 'Not Found';
+                    }
+                }
+                acc.push(result);
+
+                raw_alert += 1;
+            } catch (error) {
+                console.log(`Error: ${error}`);
+            }
+            return acc;
+        }, []);
+        return alertInfo;
+    }
+    const alertInfo = parseLog(rawLog);
+    const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
+    function generateDescription() {
+        const alertDescriptions = [];
+        for (const info of alertInfo) {
+            let desc = `Observed ${summary.split(']').at(-1)}\n`;
+            if (typeof info === 'object') {
+                Object.entries(info).forEach(([index, value]) => {
+                    if (value !== undefined && value !== 'null') {
+                        if (index == 'time') {
+                            desc += `<strong>time(<span class="red_highlight">GMT</span>):</strong> ${value}\n`;
+                        } else {
+                            desc += `<strong>${index}:</strong> ${value}\n`;
+                        }
+                    }
+                });
+            } else {
+                desc += info + '\n';
+            }
+            alertDescriptions.push(desc);
+        }
+        const alertMsg = [...new Set(alertDescriptions)].join('\n');
+        showDialog(alertMsg);
+    }
+    addButton('generateDescription', 'Description', generateDescription);
+}
+
 function NoLogAlertHandler(...kwargs) {
     let { summary } = kwargs[0];
     function generateDescription() {
@@ -5459,7 +5560,6 @@ function LLA_CS_AlertHandler(DecoderName, logsourcedomain) {
         }
     }
 
-    let summary = $('#summary-val').text().trim();
     //判断工单是否升级，
     if (Org_none && DecoderName == 'crowdstrike_cef') {
         $('#opsbar-opsbar-transitions').on('click', () => {
@@ -5568,10 +5668,11 @@ function RealMonitorMe() {
 }
 
 function formatCurrentDateTime(dateStr, decoder_name) {
+    console.log('===', dateStr, decoder_name);
     if (dateStr) {
         var date = new Date(dateStr);
         var localOffset = date.getTimezoneOffset();
-        if (decoder_name == 'impervainc_cef' || decoder_name == 'checkpoint_cef' || decoder_name == 'darktrace-json') {
+        if (['impervainc_cef', 'checkpoint_cef', 'darktrace-json', 'cloudflare-json'].includes(decoder_name)) {
             var targetDate = new Date(date.getTime() + (480 + localOffset) * 60000);
         } else {
             var targetDate = new Date(date.getTime() + (960 + localOffset) * 60000);
@@ -5857,7 +5958,10 @@ function RealTimeMonitoring() {
         if (rawLog == '') {
             rawLog = $('#field-customfield_10904 > div:first-child > div:nth-child(2)').text().trim().split('\n');
         }
-        const summary = $('#summary-val').text().trim();
+        let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
+        if (DecoderName == '') {
+            DecoderName = $('#customfield_10906-val').text().trim().toLowerCase();
+        }
         if ($('#issue-content').length && !$('#generateDescription').length) {
             console.log('#### Code Issue page: Alert Handler ####');
             const handlers = {
@@ -5915,10 +6019,6 @@ function RealTimeMonitoring() {
                 'arista_cef': SangforAlertHandler,
                 'networkbox': SangforAlertHandler
             };
-            let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
-            if (DecoderName == '') {
-                DecoderName = $('#customfield_10906-val').text().trim().toLowerCase();
-            }
             if (DecoderName.includes('m365-defender-json')) {
                 let decoder_name = [];
                 DecoderName.split(' ').forEach((element, index) => {
@@ -5959,7 +6059,8 @@ function RealTimeMonitoring() {
                 'multiple authentication failures (windows)': WineventAlertHandler,
                 'incoming admin protocol used': FortigateAlertHandler,
                 'abnormally large outgoing accept traffic': FortigateAlertHandler,
-                'windows multiple accounts lockout within a short period': WineventAlertHandler
+                'windows multiple accounts lockout within a short period': WineventAlertHandler,
+                'splunk alert:  sentinelone': SplunkAlertHandler
             };
             let No_Decoder_handler = null;
             Object.keys(No_Decoder_handlers).forEach((key) => {
@@ -6020,7 +6121,6 @@ function RealTimeMonitoring() {
 
         let cachedEntry = GM_getValue('cachedEntry', null);
         Description = $('#description-val').text().trim();
-        Summary = $('#summary-val').text().trim();
         if (
             window.location.host === cachedEntry['hk'].split('//')[1] ||
             window.location.host === cachedEntry['nyx'].split('//')[1]
@@ -6082,10 +6182,7 @@ function RealTimeMonitoring() {
     // Issue page: Norm Alert
     setTimeout(() => {
         var LogSourceDomain = $('#customfield_10223-val').text().trim();
-        let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
-        if (DecoderName == '') {
-            DecoderName = $('#customfield_10906-val').text().trim().toLowerCase();
-        }
+
         const cachedMappingContent = GM_getValue('cachedMappingContent', null);
         if (LogSourceDomain.includes(cachedMappingContent['lla'])) {
             LLA_CS_AlertHandler(DecoderName, cachedMappingContent['lla']);
@@ -6158,6 +6255,7 @@ function RealTimeMonitoring() {
             }
         }, 500);
     });
+
     RealMonitorMe();
     registerSearchMenu();
     registerExceptionMenu();
