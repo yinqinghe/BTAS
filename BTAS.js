@@ -5951,17 +5951,18 @@ function RealTimeMonitoring() {
             checkATTCK();
         }
     }, 4500);
+    var LogSourceDomain = $('#customfield_10223-val').text().trim();
+    let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
+    if (DecoderName == '') {
+        DecoderName = $('#customfield_10906-val').text().trim().toLowerCase();
+    }
     // Issue page: Alert Handler
     function Alert_Handler() {
-        var LogSourceDomain = $('#customfield_10223-val').text().trim();
         let rawLog = $('#field-customfield_10219 > div:first-child > div:nth-child(2)').text().trim().split('\n');
         if (rawLog == '') {
             rawLog = $('#field-customfield_10904 > div:first-child > div:nth-child(2)').text().trim().split('\n');
         }
-        let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
-        if (DecoderName == '') {
-            DecoderName = $('#customfield_10906-val').text().trim().toLowerCase();
-        }
+
         if ($('#issue-content').length && !$('#generateDescription').length) {
             console.log('#### Code Issue page: Alert Handler ####');
             const handlers = {
@@ -6114,7 +6115,6 @@ function RealTimeMonitoring() {
             TicketAutoEscalate,
             Status,
             RawLog,
-            Summary,
             AgentName,
             Description,
             SourceIP;
@@ -6161,7 +6161,7 @@ function RealTimeMonitoring() {
             TicketAutoEscalate,
             Status,
             RawLog,
-            Summary,
+            Summary: summary,
             AgentName,
             Description,
             SourceIP
@@ -6181,8 +6181,6 @@ function RealTimeMonitoring() {
 
     // Issue page: Norm Alert
     setTimeout(() => {
-        var LogSourceDomain = $('#customfield_10223-val').text().trim();
-
         const cachedMappingContent = GM_getValue('cachedMappingContent', null);
         if (LogSourceDomain.includes(cachedMappingContent['lla'])) {
             LLA_CS_AlertHandler(DecoderName, cachedMappingContent['lla']);
