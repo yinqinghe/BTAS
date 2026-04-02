@@ -4135,64 +4135,10 @@ function MDE365AlertHandler(...kwargs) {
     parseLog(rawLog);
     const cachedMappingContent = GM_getValue('cachedMappingContent', null);
     const invalidValues = ['', 'N/A', undefined, null, `undefined\\\\undefined`];
-
-    function generateDescription_MDE() {
-        console.log('===alertInfo_MDE', alertInfo_MDE);
-        for (const info of alertInfo_MDE) {
-            let desc = '';
-            if (LogSourceDomain == cachedMappingContent['kka']) {
-                desc = `观察到 ${info.summary}\n`;
-            } else {
-                desc = `Observed ${info.summary}\n`;
-            }
-            for (let key in info) {
-                if (Array.isArray(info[key])) {
-                    info[key].forEach((item) => {
-                        for (let subKey in item) {
-                            console.log('===subKey', item[subKey], subKey);
-                            if (Array.isArray(item[subKey])) {
-                                item[subKey].forEach((i) => {
-                                    desc += '\n';
-                                    for (let sub_key in i) {
-                                        if (!invalidValues.includes(i[sub_key])) {
-                                            desc += `${sub_key}: ${i[sub_key]}\n`;
-                                            if (['accountName', 'userSid', 'userPrincipalName'].includes(sub_key)) {
-                                                entities.push(`${sub_key}: ${i[sub_key]}`);
-                                            }
-                                        }
-                                    }
-                                });
-                            } else if (!invalidValues.includes(item[subKey]) && subKey !== 'alertId') {
-                                desc += `${subKey}: ${item[subKey]}\n`;
-                            }
-                        }
-                    });
-                } else {
-                    if (
-                        !invalidValues.includes(info[key]) &&
-                        key !== 'extrainfo' &&
-                        key !== 'summary' &&
-                        key !== 'id'
-                    ) {
-                        console.log('===MDE', key, info[key]);
-                        if (key == 'creationTime') {
-                            desc += `creationTime(<span class="red_highlight">GMT+8</span>): ${info[key]}\n`;
-                        } else {
-                            desc += `${key}: ${info[key]}\n`;
-                            if (key == 'Host') {
-                                entities.push(`${key}: ${info[key]}`);
-                            }
-                        }
-                    }
-                }
-            }
-
-            alertDescriptions.push(desc);
-        }
-    }
-    function generateDescription_365() {
-        console.log('===alertInfo_365', alertInfo_365);
-        for (const info of alertInfo_365) {
+    const excludedKeys = new Set(['summary', 'alertid', 'incidenturi', 'extrainfo', 'id']);
+    function genDescription(alertInfo) {
+        console.log('===alertInfo', alertInfo);
+        for (const info of alertInfo) {
             let desc = '';
             if (LogSourceDomain == cachedMappingContent['kka']) {
                 desc = `观察到 ${info.summary}\n`;
@@ -4207,7 +4153,12 @@ function MDE365AlertHandler(...kwargs) {
                                 console.log('===subKey', item[subKey], subKey);
                                 if (Array.isArray(item[subKey])) {
                                     item[subKey].forEach((i) => {
-                                        desc += '\n';
+                                        const hasValidValue = Object.keys(i).some(
+                                            (sub_key) => !invalidValues.includes(i[sub_key])
+                                        );
+                                        if (hasValidValue) {
+                                            desc += '\n';
+                                        }
                                         for (let sub_key in i) {
                                             if (!invalidValues.includes(i[sub_key])) {
                                                 desc += `${sub_key}: ${i[sub_key]}\n`;
@@ -4229,16 +4180,15 @@ function MDE365AlertHandler(...kwargs) {
                             }
                         });
                     } else {
-                        if (
-                            !invalidValues.includes(info[key]) &&
-                            key !== 'summary' &&
-                            key !== 'alertid' &&
-                            key !== 'incidenturi'
-                        ) {
+                        if (!invalidValues.includes(info[key]) && !excludedKeys.has(key)) {
+                            console.log('===MDE', key, info[key]);
                             if (key == 'creationTime') {
                                 desc += `creationTime(<span class="red_highlight">GMT+8</span>): ${info[key]}\n`;
                             } else {
                                 desc += `${key}: ${info[key]}\n`;
+                                if (key == 'Host') {
+                                    entities.push(`${key}: ${info[key]}`);
+                                }
                             }
                         }
                     }
@@ -4247,7 +4197,6 @@ function MDE365AlertHandler(...kwargs) {
                 console.error(`Error: ${error}`);
             }
             let MDEURL = '';
-
             if (LogSourceDomain == cachedMappingContent['wwa']) {
                 if (info.alertid && !MDEURL.includes(info.alertid)) {
                     MDEURL += `https://security.microsoft.com/alerts/${info.alertid}<br>`;
@@ -4258,10 +4207,10 @@ function MDE365AlertHandler(...kwargs) {
                 }
                 desc += `MDE URL: \n${MDEURL}\n`;
             }
-
             alertDescriptions.push(desc);
         }
     }
+
     if (raw_alert < num_alert) {
         AJS.banner({
             body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
@@ -4269,8 +4218,8 @@ function MDE365AlertHandler(...kwargs) {
     }
 
     function generateDescription() {
-        generateDescription_MDE();
-        generateDescription_365();
+        genDescription(alertInfo_MDE);
+        genDescription(alertInfo_365);
         let alertMsg = [...new Set(alertDescriptions)].join('\n');
         if (
             LogSourceDomain == cachedMappingContent['ffa'] ||
@@ -5195,7 +5144,6 @@ function GoogleAlertHandler(...kwargs) {
                                 : undefined
                         };
                     }
-
                     acc.push(result);
                 }
                 if (DecoderName == 'cloudflare-json') {
@@ -5222,89 +5170,37 @@ function GoogleAlertHandler(...kwargs) {
                     acc.push(alert);
                     console.log('===', alert);
                 }
+                if (DecoderName == 'watchtowr-json') {
+                    let watchtowr = JSON.parse(log)['watchtowr'];
+                    let wt_poi = JSON.parse(log)['wt_poi'];
+                    let wt_hunt = JSON.parse(log)['wt_hunt'];
 
-                raw_alert += 1;
-            } catch (error) {
-                console.log(`Error: ${error}`);
-            }
-            return acc;
-        }, []);
-        return alertInfo;
-    }
-    const alertInfo = parseLog(rawLog);
-    const num_alert = $('#customfield_10300-val').text().trim();
-    if (raw_alert < num_alert) {
-        AJS.banner({
-            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-        });
-    }
-    function generateDescription() {
-        const alertDescriptions = [];
-        for (const info of alertInfo) {
-            let desc = `Observed ${summary.split(']').at(-1)}\n`;
-            Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && value !== ' ' && index != 'Summary') {
-                    if (index == 'createtime') {
-                        desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
-                    } else {
-                        desc += `${index}: ${value}\n`;
+                    let result = {};
+                    if (watchtowr) {
+                        result['createtime'] = watchtowr['created_at'].split('.')[0] + 'Z';
+                        result['title'] = watchtowr['title'];
+                        result['impact'] = watchtowr['impact'];
+                        result['evidence'] = escapeJsString(watchtowr['evidence']);
+                        result['recommendation'] = watchtowr['recommendation'];
+                        result['references'] = watchtowr['references'];
                     }
+                    if (wt_poi) {
+                        result['createtime'] = wt_poi['discoveryDate'];
+                        result['name'] = wt_poi['name'];
+                        result['type'] = wt_poi['type'];
+                        result['url'] = wt_poi['url'];
+                        result[wt_poi['assetType']] = wt_poi['assetName'];
+                    }
+                    if (wt_hunt) {
+                        result['createtime'] = wt_hunt['created_at'].split('.')[0] + 'Z';
+                        result['total_findings'] = wt_hunt['total_findings'];
+                        result['hunt_request_type'] = wt_hunt['hunt_request_type'];
+                        result['description'] = wt_hunt['description'];
+                        result['hypothesis'] = wt_hunt['hypothesis'];
+                        result['status'] = wt_hunt['status'];
+                    }
+                    acc.push(result);
                 }
-            });
-            alertDescriptions.push(desc);
-        }
-        const alertMsg = [...new Set(alertDescriptions)].join('\n');
-        showDialog(alertMsg);
-    }
-    addButton('generateDescription', 'Description', generateDescription);
-}
-
-function WatchTowrAlertHandler(...kwargs) {
-    const { rawLog, summary } = kwargs[0];
-    var raw_alert = 0;
-    function escapeJsString(str) {
-        return str
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#x27;');
-    }
-    function parseLog(rawLog) {
-        const alertInfo = rawLog.reduce((acc, log) => {
-            try {
-                if (log.length == 0) {
-                    return acc;
-                }
-                let watchtowr = JSON.parse(log)['watchtowr'];
-                let wt_poi = JSON.parse(log)['wt_poi'];
-                let wt_hunt = JSON.parse(log)['wt_hunt'];
-
-                let result = {};
-                if (watchtowr) {
-                    result['createtime'] = watchtowr['created_at'].split('.')[0] + 'Z';
-                    result['title'] = watchtowr['title'];
-                    result['impact'] = watchtowr['impact'];
-                    result['evidence'] = escapeJsString(watchtowr['evidence']);
-                    result['recommendation'] = watchtowr['recommendation'];
-                    result['references'] = watchtowr['references'];
-                }
-                if (wt_poi) {
-                    result['createtime'] = wt_poi['discoveryDate'];
-                    result['name'] = wt_poi['name'];
-                    result['type'] = wt_poi['type'];
-                    result['url'] = wt_poi['url'];
-                    result[wt_poi['assetType']] = wt_poi['assetName'];
-                }
-                if (wt_hunt) {
-                    result['createtime'] = wt_hunt['created_at'].split('.')[0] + 'Z';
-                    result['total_findings'] = wt_hunt['total_findings'];
-                    result['hunt_request_type'] = wt_hunt['hunt_request_type'];
-                    result['description'] = wt_hunt['description'];
-                    result['hypothesis'] = wt_hunt['hypothesis'];
-                    result['status'] = wt_hunt['status'];
-                }
-                acc.push(result);
                 raw_alert += 1;
             } catch (error) {
                 console.log(`Error: ${error}`);
@@ -6010,7 +5906,7 @@ function RealTimeMonitoring() {
                 'web-accesslog-iis-default': WebAccesslogAlertHandler,
                 'oracle-json': OracleAlertHandler,
                 'google-api-json': GoogleAlertHandler,
-                'watchtowr-json': WatchTowrAlertHandler,
+                'watchtowr-json': GoogleAlertHandler,
                 'threatbook-tdp': CheckPointEmailHandler,
                 'kes': GemsAlertHandler,
                 'zscaler-json': ZscalerAlertHandler,
