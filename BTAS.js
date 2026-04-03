@@ -4939,7 +4939,7 @@ function CheckPointEmailHandler(...kwargs) {
 }
 
 function NetsKopeAlertHandler(...kwargs) {
-    const { rawLog, summary } = kwargs[0];
+    const { rawLog, summary, DecoderName } = kwargs[0];
     var raw_alert = 0;
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
@@ -4947,28 +4947,57 @@ function NetsKopeAlertHandler(...kwargs) {
                 if (log.length == 0) {
                     return acc;
                 }
-                const regex =
-                    /"[^"]*"|\b(?:POST|GET|PUT|DELETE)\b|\b(?:https?|TLSv\d\.\d)\b|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b|\b\d{3}\b|[A-Z]{2}|\b(?:Block|No\sBlock|Allow)\b|(?:Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{2}:\d{2}:\d{2}/g;
-
-                // const regex = /"[^"]*"|\b(?:POST|GET|PUT|DELETE)\b|\b(?:https?|TLSv\d\.\d)\b|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b|\b\d{3}\b|[A-Z]{2}|(?:Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{2}:\d{2}:\d{2}/g;
-                const blocks = log.match(regex);
-                console.log(blocks);
-                let result = {
-                    createtime: blocks[0],
-                    source_ip: blocks[1],
-                    des_ip: blocks[32],
-                    User: blocks[2],
-                    content_type: blocks[6],
-                    status_code: blocks[7],
-                    Geo_location: blocks[11],
-                    host: blocks[46],
-                    sni: blocks[33],
-                    ua: blocks[5],
-                    alert_name: blocks[29]
-                    // 'action': blocks[28],
-                };
-                console.log('===', result);
-                acc.push(result);
+                if (DecoderName == 'netskope') {
+                    const regex =
+                        /"[^"]*"|\b(?:POST|GET|PUT|DELETE)\b|\b(?:https?|TLSv\d\.\d)\b|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b|\b\d{3}\b|[A-Z]{2}|\b(?:Block|No\sBlock|Allow)\b|(?:Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{2}:\d{2}:\d{2}/g;
+                    // const regex = /"[^"]*"|\b(?:POST|GET|PUT|DELETE)\b|\b(?:https?|TLSv\d\.\d)\b|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b|\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b|\b\d{3}\b|[A-Z]{2}|(?:Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{2}:\d{2}:\d{2}/g;
+                    const blocks = log.match(regex);
+                    console.log(blocks);
+                    let result = {
+                        createtime: blocks[0],
+                        source_ip: blocks[1],
+                        des_ip: blocks[32],
+                        User: blocks[2],
+                        content_type: blocks[6],
+                        status_code: blocks[7],
+                        Geo_location: blocks[11],
+                        host: blocks[46],
+                        sni: blocks[33],
+                        ua: blocks[5],
+                        alert_name: blocks[29]
+                        // 'action': blocks[28],
+                    };
+                    acc.push(result);
+                }
+                if (DecoderName == 'windows') {
+                    const result = {};
+                    const headerMatch = log.match(/^([\d\s\w:]+)\s+WinEvtLog:.*?AUDIT_FAILURE\((\d+)\)/);
+                    if (headerMatch) {
+                        result['Time'] = headerMatch[1];
+                        result['EventID'] = headerMatch[2];
+                        result['Status'] = 'AUDIT_FAILURE';
+                    }
+                    const pairs = [
+                        'User Name',
+                        'User ID',
+                        'Service Name',
+                        'Pre-Authentication Type',
+                        'Failure Code',
+                        'Client Address'
+                    ];
+                    pairs.forEach((key) => {
+                        const regex = new RegExp(`${key}:\\s*([^\\s]+)`, 'i');
+                        const match = log.match(regex);
+                        if (match) {
+                            result[key] = match[1].replace(/[%{}]/g, ''); // 清理特殊字符
+                        }
+                    });
+                    if (result['Failure Code'] === '0x19') {
+                        result['Failure Meaning'] = 'Additional pre-authentication required (Typical in Kerberos)';
+                    }
+                    console.log('===windows', result);
+                    acc.push(result);
+                }
                 raw_alert += 1;
             } catch (error) {
                 console.log(`Error: ${error}`);
@@ -4986,21 +5015,60 @@ function NetsKopeAlertHandler(...kwargs) {
         });
     }
     function generateDescription() {
+        const prefix = `Observed ${summary}\n`;
         const alertDescriptions = [];
-        for (const info of alertInfo) {
-            let desc = `Observed ${summary.split(']').at(-1)}\n`;
+        if (alertInfo.length <= 1) {
+            const info = alertInfo[0];
+            let desc = prefix;
             Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && value !== ' ' && index != 'Summary') {
-                    if (index == 'time') {
-                        desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
-                    } else {
-                        desc += `${index}: ${value}\n`;
-                    }
+                if (value !== undefined) {
+                    desc += `${index}: ${value}\n`;
                 }
             });
             alertDescriptions.push(desc);
+        } else {
+            // 多条，聚合处理
+            const allKeys = Object.keys(alertInfo[0]);
+            const commonFields = {};
+            const diffKeys = [];
+            for (const key of allKeys) {
+                const values = alertInfo.map((a) => a[key]);
+                const allSame = values.every((v) => v === values[0]);
+                if (allSame && values[0] !== undefined) {
+                    commonFields[key] = values[0];
+                } else {
+                    diffKeys.push(key);
+                }
+            }
+            let desc = prefix;
+            Object.entries(commonFields).forEach(([key, value]) => {
+                desc += `${key}: ${value}\n`;
+            });
+            if (diffKeys.length > 0) {
+                // 对 diffKeys 中每个 key 的值先去重
+                const deduplicatedRows = [
+                    ...new Map(
+                        alertInfo.map((info) => {
+                            const key = diffKeys
+                                .filter((k) => info[k] !== undefined && info[k] !== 'N/A')
+                                .map((k) => `${k}=${info[k]}`)
+                                .join(', ');
+                            return [key, info]; // 以拼接字符串为 key，自动去重
+                        })
+                    ).values()
+                ];
+
+                deduplicatedRows.forEach((info) => {
+                    const parts = diffKeys
+                        .filter((k) => info[k] !== undefined && info[k] !== 'N/A')
+                        .map((k) => `${k}=${info[k]}`)
+                        .join(', ');
+                    desc += `  ${parts}\n`;
+                });
+            }
+            alertDescriptions.push(desc); // 整组只 push 一条
         }
-        const alertMsg = [...new Set(alertDescriptions)].join('\n');
+        const alertMsg = alertDescriptions.join('\n');
         showDialog(alertMsg);
     }
     addButton('generateDescription', 'Description', generateDescription);
@@ -5878,7 +5946,7 @@ function RealTimeMonitoring() {
                 'azuregraphapi-json': AzureGraphAlertHandler,
                 'paloalto-firewall': paloaltoAlertHandler,
                 'impervainc_cef': SangforAlertHandler,
-                'proofpoint_tap': ProofpointAlertHandler,
+                // 'proofpoint_tap': ProofpointAlertHandler,
                 'zscaler-zpa-json': ZscalerAlertHandler,
                 'pulse-secure': PulseAlertHandler,
                 'aws-guardduty': AwsAlertHandler,
@@ -5895,7 +5963,7 @@ function RealTimeMonitoring() {
                 'sentinelone-json': SentinelOneAlertHandler,
                 'sonicwall': FortigateAlertHandler,
                 'trellix_cef': SangforAlertHandler,
-                'json': JsonAlertHandler,
+                // 'json': JsonAlertHandler,
                 'f5-asm': F5AsmAlertHandler,
                 'sangfor': SangforAlertHandler,
                 'checkpoint-harmony-email-saas': CheckPointEmailHandler,
@@ -5914,7 +5982,8 @@ function RealTimeMonitoring() {
                 'bigdata-hdfs-cef': CheckPointEmailHandler,
                 'bigdata-hive-cef': CheckPointEmailHandler,
                 'arista_cef': SangforAlertHandler,
-                'networkbox': SangforAlertHandler
+                'networkbox': SangforAlertHandler,
+                'windows': NetsKopeAlertHandler
             };
             if (DecoderName.includes('m365-defender-json')) {
                 let decoder_name = [];
