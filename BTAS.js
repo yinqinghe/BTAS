@@ -1976,7 +1976,6 @@ function SpemAlertHandler(...kwargs) {
                     'Remote Host IP': logObject['Remote Host IP'],
                     'Remote Port': logObject['Remote Port'],
                     'Application': logObject['Application'],
-                    'SHA-256': logObject['SHA-256'],
                     'Intrusion URL': logObject['Intrusion URL'],
                     'Action': logObject['Action']
                 });
@@ -3112,8 +3111,12 @@ function AlicloudAlertHandler(...kwargs) {
                             http_user_agent,
                             upstream_addr,
                             request_path,
-                            request_method
+                            request_method,
+                            request_uri
                         } = json_alert['alicloud'];
+                        if (request_path == request_uri) {
+                            request_uri = undefined;
+                        }
                         let alertExtraInfo = {
                             createTime: time,
                             eventId: eventId ? eventId : undefined,
@@ -3139,7 +3142,8 @@ function AlicloudAlertHandler(...kwargs) {
                             http_user_agent: http_user_agent ? http_user_agent : undefined,
                             upstream_addr: upstream_addr ? upstream_addr : undefined,
                             request_path: request_path ? request_path : undefined,
-                            request_method: request_method ? request_method : undefined
+                            request_method: request_method ? request_method : undefined,
+                            request_uri: request_uri ? request_uri : undefined
                         };
                         console.log('===', requestParameters, time);
 
@@ -4995,6 +4999,28 @@ function NetsKopeAlertHandler(...kwargs) {
                     if (result['Failure Code'] === '0x19') {
                         result['Failure Meaning'] = 'Additional pre-authentication required (Typical in Kerberos)';
                     }
+                    // 2. #011 分割后直接匹配 Key=Value
+                    if (result && Object.keys(result).length == 0) {
+                        let log_dict = {};
+                        const timeMatch = log.match(/^(\w+\s+\d+\s+[\d:]+)\s+/);
+                        if (timeMatch) {
+                            result['Time'] = timeMatch[1];
+                        }
+                        const remaining = log.slice(timeMatch[0].length);
+                        remaining.split('#011').forEach((segment) => {
+                            const match = segment.match(/^([^=]+)=(.*)$/s);
+                            if (match) {
+                                log_dict[match[1].trim()] = match[2].trim();
+                            }
+                        });
+                        result['AgentLogFile'] = log_dict['AgentLogFile'];
+                        result['Computer'] = log_dict['Computer'];
+                        result['OriginatingComputer'] = log_dict['OriginatingComputer'];
+                        result['User'] = log_dict['User'];
+                        result['EventID'] = log_dict['EventID'];
+                        result['Level'] = log_dict['Level'];
+                        result['Message'] = log_dict['Message'];
+                    }
                     console.log('===windows', result);
                     acc.push(result);
                 }
@@ -5571,12 +5597,15 @@ function MMB_AlertHandler() {
     function generateDescription() {
         let srcip, dstip;
         let tt = false;
-        let start = `https://${cachedMappingContent['kkb_url']}/app/discover#/view/a5308c30-5193-11f0-995b-312000e37d97?_g=(filters:!(`;
+        let base_url = `https://${cachedMappingContent['kkb_url']}/app/discover#/view/60ea2870-331e-11f1-8709-63db1cd27961`;
+        let start = base_url + `?_g=(filters:!(`;
         let kibana = $('#field-customfield_10308 .flooded').text().trim().split('\n')[0];
+        let index = `wazuh-archives-3.x-${cachedMappingContent['mmb']}-*`;
+
         const match_src = kibana.match(/data\.srcip:&#39;((\d{1,3}\.){3}\d{1,3})/);
         srcip = match_src ? match_src[1] : null;
         if (srcip) {
-            start += `('$state':(store:appState),meta:(index:'wazuh-alerts-3.x-*',type:phrases,key:data.srcip,value:'${srcip}'),query:(match_phrase:(data.srcip:'${srcip}')))`;
+            start += `('$state':(store:appState),meta:(index:'${index}',type:phrases,key:data.srcip,value:'${srcip}'),query:(match_phrase:(data.srcip:'${srcip}')))`;
             tt = true;
         }
         const match_dst = kibana.match(/data\.dstip:&#39;((\d{1,3}\.){3}\d{1,3})/);
@@ -5585,7 +5614,7 @@ function MMB_AlertHandler() {
             if (tt) {
                 start += ',';
             }
-            start += `('$state':(store:appState),meta:(index:'wazuh-alerts-3.x-*',type:phrases,key:data.dstip,value:'${dstip}'),query:(match_phrase:(data.dstip:'${dstip}')))`;
+            start += `('$state':(store:appState),meta:(index:'${index}',type:phrases,key:data.dstip,value:'${dstip}'),query:(match_phrase:(data.dstip:'${dstip}')))`;
         }
         start += '),refreshInterval:(pause:!t,value:3600000),time:(from:now-7d/d,to:now))';
 
@@ -5593,6 +5622,8 @@ function MMB_AlertHandler() {
             const output = kibana.replace(/from:&#39;[^&]+&#39;,to:&#39;[^&]+&#39;/g, 'from:now-7d%2Fd,to:now');
             const textarea = document.createElement('textarea');
             textarea.innerHTML = output;
+            textarea.value = textarea.value.replace('wazuh-alerts-3.x-*', index);
+            textarea.value = textarea.value.replace(/^[^?]+/, base_url);
             console.log('hello', textarea.value);
             window.open(textarea.value, '_blank');
         } else {
@@ -5855,6 +5886,273 @@ function TicketProcessingStandards(...kwargs) {
             showPopup(msg);
         });
     }
+    const timer_update = setInterval(function () {
+        var btn_update = document.getElementById('action_id_121');
+        if (btn_update && !btn_update.dataset.bound) {
+            clearInterval(timer_update);
+            console.log('===btn_update', btn_update);
+            btn_update.dataset.bound = 'true'; // 添加标记，避免重复绑定事件
+            // btn_update.addEventListener('click', function (event) {
+            //     let get_pass = Verify_escalate(cachedLogsourcedomainOorg);
+            //     console.log('===get_pass', get_pass);
+            //     if (get_pass) {
+            //         console.log('===binggo');
+            //         // alert('ORG填写正确');
+            //         event.preventDefault(); // 阻止默认行为
+            //     } else {
+            //         alert('ORG填写错误， 若检查后确认无误，需暂时关闭BTAS，并反馈给Mike/Barry');
+            //         event.preventDefault(); // 阻止默认行为
+            //     }
+            // });
+        }
+    }, 1000);
+}
+
+const MONTH_MAP = {
+    jan: 0,
+    feb: 1,
+    mar: 2,
+    apr: 3,
+    may: 4,
+    jun: 5,
+    jul: 6,
+    aug: 7,
+    sep: 8,
+    oct: 9,
+    nov: 10,
+    dec: 11
+};
+
+function checkAlertAge(logText, baseTimeStr, windowHours = 20) {
+    function parseBaseTime(str) {
+        if (str == null) return null;
+        const re = /(\d{1,2})\/(\w{3})\/(\d{4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i;
+        const m = String(str).trim().match(re);
+        if (!m) return null;
+        const mon = MONTH_MAP[m[2].toLowerCase()];
+        if (mon === undefined) return null;
+        let h = parseInt(m[4]);
+        const min = parseInt(m[5]);
+        if (m[6].toUpperCase() === 'PM' && h !== 12) h += 12;
+        if (m[6].toUpperCase() === 'AM' && h === 12) h = 0;
+        return Date.UTC(parseInt(m[3]), mon, parseInt(m[1]), h, min);
+    }
+
+    function parseAlertTime(log) {
+        if (log == null) return null;
+        const s = String(log).trim();
+        const GMT8 = 8 * 3600 * 1000;
+
+        // ── P1：指定 JSON 字段（ISO 8601 UTC）────────────────────────────
+        const namedIso = s.match(
+            /"?(?:lastUpdateTime|systemTime|timestamp|eventTime|startTime|endTime|createdAt|updatedAt|CreationTime|identifiedAt)"?\s*:\s*"?([^",\s]+)"?/
+        );
+        if (namedIso) {
+            const d = new Date(namedIso[1]);
+            if (!isNaN(d)) return d.getTime() + GMT8;
+        }
+
+        // ── P2：event_timestamp 字段（13 位毫秒 UTC）─────────────────────
+        const evtTs = s.match(/"event_timestamp"\s*:\s*(\d{13})/);
+        if (evtTs) return parseInt(evtTs[1]) + GMT8;
+        // ── P2.5：具名纳秒时间戳字段（19 位，÷1000000 转毫秒）────────────
+        // 放在 P3 CEF rt= 之前，避免被后续 pattern 误处理
+        const namedNano = s.match(/"(?:EdgeStartTimestamp|eventtime|nanoTimestamp)"\s*:\s*(\d{19})/);
+        if (namedNano) return Math.floor(parseInt(namedNano[1]) / 1000000) + GMT8;
+
+        // ── 同时兼容 KV 格式：EdgeStartTimestamp= 1774164863661000000 ──────
+        const kvNano = s.match(/\b(?:EdgeStartTimestamp|eventtime)=(\d{19})\b/);
+        if (kvNano) return Math.floor(parseInt(kvNano[1]) / 1000000) + GMT8;
+
+        // ── P3：CEF rt= 字段（13 位毫秒 UTC）────────────────────────────
+        const cefRt = s.match(/\brt=(\d{13})\b/);
+        if (cefRt) return parseInt(cefRt[1]) + GMT8;
+
+        // ── P4：Sangfor KV 具名时间字段（10 位秒级 UTC）──────────────────
+        // 优先匹配 updated_at / created_at / last_time / first_time 等明确时间 key
+        const kvTime = s.match(
+            /\b(?:updated_at|created_at|last_time|first_time|event_time|occur_time|start_time|end_time)=(\d{10})\b/
+        );
+        if (kvTime) return parseInt(kvTime[1]) * 1000 + GMT8;
+
+        // ── P5：Fortinet date= + time= + tz= 组合 ────────────────────────
+        const fnDate = s.match(/\bdate=(\d{4}-\d{2}-\d{2})\b/);
+        const fnTime = s.match(/\btime=(\d{2}:\d{2}:\d{2})\b/);
+        const fnTz = s.match(/\btz="([^"]+)"/);
+        if (fnDate && fnTime) {
+            const tz = fnTz ? fnTz[1].replace(/^GMT/, '') : '+00:00';
+            const tzFmt = /^\d/.test(tz) ? `+${tz}` : tz;
+            const tzColon = tzFmt.includes(':') ? tzFmt : `${tzFmt.slice(0, 3)}:${tzFmt.slice(3)}`;
+            const d = new Date(`${fnDate[1]}T${fnTime[1]}${tzColon}`);
+            if (!isNaN(d)) return d.getTime() + GMT8;
+        }
+
+        // ── P6：带时区的 ISO 8601（含毫秒、含时区偏移）───────────────────
+        const isoTz = s.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))/);
+        if (isoTz) {
+            const d = new Date(isoTz[1]);
+            if (!isNaN(d)) return d.getTime() + GMT8;
+        }
+
+        // ── P7：Apache/Nginx 访问日志：[04/Apr/2026:03:38:42 +0000] ──────
+        const apacheTime = s.match(/\[(\d{2})\/(\w{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2})\s*([+-]\d{4})\]/);
+        if (apacheTime) {
+            const mon = MONTH_MAP[apacheTime[2].toLowerCase()];
+            if (mon !== undefined) {
+                const tz = apacheTime[7];
+                const tzColon = `${tz.slice(0, 3)}:${tz.slice(3)}`;
+                const d = new Date(
+                    `${apacheTime[3]}-${String(mon + 1).padStart(2, '0')}-${apacheTime[1]}T${apacheTime[4]}:${apacheTime[5]}:${apacheTime[6]}${tzColon}`
+                );
+                if (!isNaN(d)) return d.getTime() + GMT8;
+            }
+        }
+
+        // ── P8：Palo Alto YYYY/MM/DD HH:MM:SS（视为 UTC+8 字面值）────────
+        const paloDate = s.match(/(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+        if (paloDate) {
+            return Date.UTC(
+                parseInt(paloDate[1]),
+                parseInt(paloDate[2]) - 1,
+                parseInt(paloDate[3]),
+                parseInt(paloDate[4]),
+                parseInt(paloDate[5]),
+                parseInt(paloDate[6])
+            );
+        }
+
+        // ── P9：纯数字时间戳（严格整行 10/13 位）────────────────────────
+        if (/^\d{10}$/.test(s)) return parseInt(s) * 1000 + GMT8;
+        if (/^\d{13}$/.test(s)) return parseInt(s) + GMT8;
+
+        // ── P10：日志内嵌严格 10/13 位时间戳（排除 KV 字段数字、ID串）────
+        const s_noKV = s
+            .replace(/\b\w+=\d+\b/g, '') // 排除 key=数字
+            .replace(/%\{[^}]+\}/g, '') // 排除 %{S-1-5-21-...} 形式 ID
+            .replace(/\b\d+-\d+-\d+[-\d]*\b/g, ''); // 排除 SID / 短横线分隔数字串
+        const emb13 = s_noKV.match(/(?<!\d)(\d{13})(?!\d)/);
+        if (emb13) return { ts: parseInt(emb13[1]) + GMT8, matched: emb13[1] };
+        const emb10 = s_noKV.match(/(?<!\d)(\d{10})(?!\d)/);
+        if (emb10) return { ts: parseInt(emb10[1]) * 1000 + GMT8, matched: emb10[1] };
+
+        // ── P11：各类字符串时间格式 ──────────────────────────────────────
+        const patterns = [
+            // ISO 8601 无时区，补 Z 视为 UTC
+            {
+                re: /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)(?!Z|[+-]\d)/,
+                fn: (m) => {
+                    const d = new Date(m[1] + 'Z');
+                    return isNaN(d) ? null : d.getTime() + GMT8;
+                }
+            },
+            // YYYY Mon DD HH:MM:SS（无时区，视为 UTC）
+            {
+                re: /(\d{4})\s+(\w{3})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})/i,
+                fn: (m) => {
+                    const mon = MONTH_MAP[m[2].toLowerCase()];
+                    if (mon === undefined) return null;
+                    return (
+                        Date.UTC(parseInt(m[1]), mon, parseInt(m[3]), parseInt(m[4]), parseInt(m[5]), parseInt(m[6])) +
+                        GMT8
+                    );
+                }
+            },
+            // YYYY-MM-DD HH:MM:SS ±HHMM（无时区视为 UTC）
+            {
+                re: /(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?\s*([+-]\d{4})?/,
+                fn: (m) => {
+                    const tz = m[7] ? `${m[7].slice(0, 3)}:${m[7].slice(3)}` : '+00:00';
+                    const d = new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] || '00'}${tz}`);
+                    return isNaN(d) ? null : d.getTime() + GMT8;
+                }
+            },
+            // RFC 2822: [Wed, ]01 Apr 2026 10:00:00 GMT
+            {
+                re: /(?:\w{3},\s+)?(\d{1,2})\s+(\w{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s*(GMT[+-]?\d*)?/i,
+                fn: (m) => {
+                    const mon = MONTH_MAP[m[2].toLowerCase()];
+                    if (mon === undefined) return null;
+                    const d = new Date(
+                        `${m[3]}-${String(mon + 1).padStart(2, '0')}-${m[1].padStart(2, '0')}T${m[4]}:${m[5]}:${m[6]} ${m[7] || 'GMT'}`
+                    );
+                    return isNaN(d) ? null : d.getTime() + GMT8;
+                }
+            },
+            // MM/DD/YYYY HH:MM ±HHMM
+            {
+                re: /(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?\s*([+-]\d{4})?/,
+                fn: (m) => {
+                    const tz = m[7] ? `${m[7].slice(0, 3)}:${m[7].slice(3)}` : '+00:00';
+                    const d = new Date(`${m[3]}-${m[1]}-${m[2]}T${m[4]}:${m[5]}:${m[6] || '00'}${tz}`);
+                    return isNaN(d) ? null : d.getTime() + GMT8;
+                }
+            },
+            // Mon DD YYYY HH:MM:SS GMT+0800
+            {
+                re: /(\w{3})\s+(\d{1,2})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s*(GMT[+-]\d{4})?/i,
+                fn: (m) => {
+                    const mon = MONTH_MAP[m[1].toLowerCase()];
+                    if (mon === undefined) return null;
+                    let tz = '+00:00';
+                    if (m[7]) {
+                        const r = m[7].replace('GMT', '');
+                        if (r) tz = `${r.slice(0, 3)}:${r.slice(3)}`;
+                    }
+                    const d = new Date(
+                        `${m[3]}-${String(mon + 1).padStart(2, '0')}-${String(m[2]).padStart(2, '0')}T${m[4]}:${m[5]}:${m[6]}${tz}`
+                    );
+                    return isNaN(d) ? null : d.getTime() + GMT8;
+                }
+            },
+            // syslog 行首: Mar 11 21:44:03（无年份，取当前年，视为 UTC）
+            {
+                re: /^(\w{3})\s{1,2}(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})/,
+                fn: (m) => {
+                    const mon = MONTH_MAP[m[1].toLowerCase()];
+                    if (mon === undefined) return null;
+                    const year = new Date().getUTCFullYear();
+                    return Date.UTC(year, mon, parseInt(m[2]), parseInt(m[3]), parseInt(m[4]), parseInt(m[5])) + GMT8;
+                }
+            }
+        ];
+
+        for (const { re, fn } of patterns) {
+            const m = s.match(re);
+            if (m) {
+                const result = fn(m);
+                if (result != null && !isNaN(result)) return result;
+            }
+        }
+        return null;
+    }
+    // ── 主逻辑 ──────────────────────────────────────────────────────
+    if (logText == null || baseTimeStr == null) {
+        alert('⚠️ 告警日志时间解析失败，参数为空');
+        return { isNew: false, logTime: null, diffHours: null, reason: '参数为空' };
+    }
+    const baseTs = parseBaseTime(baseTimeStr);
+    const logTs = parseAlertTime(logText);
+    if (logTs == null) {
+        // alert('⚠️ 日志中未识别到有效时间信息');
+        return { isNew: false, logTime: null, diffHours: null, reason: '日志中未识别到时间' };
+    }
+
+    const diffMs = baseTs - logTs;
+    const diffHours = diffMs / 3600000;
+    const isNew = Math.abs(diffHours) <= windowHours;
+
+    if (!isNew) {
+        alert(`⚠️ 该告警为旧告警，距基准时间已 ${Math.abs(diffHours).toFixed(1)}h，超出 ${windowHours}h 窗口`);
+    }
+
+    return {
+        isNew,
+        logTime: new Date(logTs),
+        diffHours: parseFloat(diffHours.toFixed(2)),
+        reason: isNew
+            ? `距基准时间 ${Math.abs(diffHours).toFixed(1)}h，属于新告警`
+            : `距基准时间 ${Math.abs(diffHours).toFixed(1)}h，超出 ${windowHours}h 窗口`
+    };
 }
 
 function RealTimeMonitoring() {
@@ -6056,11 +6354,15 @@ function RealTimeMonitoring() {
             if (Log_Domain_handler) {
                 Log_Domain_handler({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: summary });
             }
+
             TicketProcessingStandards({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: summary });
             if (window.location.href.includes('MSS') || window.location.href.includes('OPS')) {
                 addButton('towhitelist', 'WhiteList', ToWhitelist);
             }
         }
+        let createtime_ticket = $('#created-val').text().trim();
+        let result = checkAlertAge(rawLog, createtime_ticket);
+        console.log('===', result);
     }
     const interval = setInterval(() => {
         const element = document.querySelector('#towhitelist');
