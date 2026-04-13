@@ -463,6 +463,14 @@ function registerCustomQuickReplyMenu() {
         ).toString();
         localStorage.setItem('MDE_Assist', MDE_Assist);
     });
+    GM_registerMenuCommand('CheckOldLog', () => {
+        let CheckOldLog_ = localStorage.getItem('CheckOldLog');
+        const CheckOldLog = prompt(
+            'Whether CheckOldLog is enabled(Example:enable  1, disable   0)',
+            CheckOldLog_
+        ).toString();
+        localStorage.setItem('CheckOldLog', CheckOldLog);
+    });
 }
 
 /**
@@ -1970,6 +1978,7 @@ function SpemAlertHandler(...kwargs) {
                 }
                 acc.push({
                     'Summary': logObject['Event Description'] !== undefined ? logObject['Event Description'] : summary,
+                    'time': logObject['Begin'],
                     'User Name': logObject['User Name'],
                     'Local Host IP': logObject['Local Host IP'],
                     'Local Port': logObject['Local Port'],
@@ -5926,16 +5935,65 @@ const MONTH_MAP = {
 function checkAlertAge(logText, baseTimeStr, windowHours = 20) {
     function parseBaseTime(str) {
         if (str == null) return null;
-        const re = /(\d{1,2})\/(\w{3})\/(\d{4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i;
-        const m = String(str).trim().match(re);
-        if (!m) return null;
-        const mon = MONTH_MAP[m[2].toLowerCase()];
-        if (mon === undefined) return null;
-        let h = parseInt(m[4]);
-        const min = parseInt(m[5]);
-        if (m[6].toUpperCase() === 'PM' && h !== 12) h += 12;
-        if (m[6].toUpperCase() === 'AM' && h === 12) h = 0;
-        return Date.UTC(parseInt(m[3]), mon, parseInt(m[1]), h, min);
+        const s = String(str).trim();
+
+        // Format 1: 12/Apr/2026 11:42 PM (original)
+        const re1 = /(\d{1,2})\/(\w{3})\/(\d{4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i;
+        const m1 = s.match(re1);
+        if (m1) {
+            const mon = MONTH_MAP[m1[2].toLowerCase()];
+            if (mon === undefined) return null;
+            let h = parseInt(m1[4]);
+            const min = parseInt(m1[5]);
+            if (m1[6].toUpperCase() === 'PM' && h !== 12) h += 12;
+            if (m1[6].toUpperCase() === 'AM' && h === 12) h = 0;
+            return Date.UTC(parseInt(m1[3]), mon, parseInt(m1[1]), h, min);
+        }
+
+        // Format 2: 05/Apr/26 7:34 AM (2-digit year)
+        const re2 = /(\d{1,2})\/(\w{3})\/(\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i;
+        const m2 = s.match(re2);
+        if (m2) {
+            const mon = MONTH_MAP[m2[2].toLowerCase()];
+            if (mon === undefined) return null;
+            let h = parseInt(m2[4]);
+            const min = parseInt(m2[5]);
+            const year = 2000 + parseInt(m2[3]);
+            if (m2[6].toUpperCase() === 'PM' && h !== 12) h += 12;
+            if (m2[6].toUpperCase() === 'AM' && h === 12) h = 0;
+            return Date.UTC(year, mon, parseInt(m2[1]), h, min);
+        }
+
+        // Format 3: 3 days ago 7:55 AM
+        const re3 = /(\d+)\s+days?\s+ago\s+(\d{1,2}):(\d{2})\s*(AM|PM)/i;
+        const m3 = s.match(re3);
+        if (m3) {
+            const now = new Date();
+            const base = new Date(
+                Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - parseInt(m3[1]))
+            );
+            let h = parseInt(m3[2]);
+            const min = parseInt(m3[3]);
+            if (m3[4].toUpperCase() === 'PM' && h !== 12) h += 12;
+            if (m3[4].toUpperCase() === 'AM' && h === 12) h = 0;
+            return Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), h, min);
+        }
+
+        // Format 4: 9 minutes ago
+        const re4 = /(\d+)\s+minutes?\s+ago/i;
+        const m4 = s.match(re4);
+        if (m4) {
+            return Date.now() - parseInt(m4[1]) * 60 * 1000;
+        }
+
+        // Format 5: 10 hours ago
+        const re5 = /(\d+)\s+hours?\s+ago/i;
+        const m5 = s.match(re5);
+        if (m5) {
+            return Date.now() - parseInt(m5[1]) * 60 * 60 * 1000;
+        }
+
+        return null;
     }
 
     function parseAlertTime(log) {
@@ -5945,15 +6003,28 @@ function checkAlertAge(logText, baseTimeStr, windowHours = 20) {
 
         // ── P1：指定 JSON 字段（ISO 8601 UTC）────────────────────────────
         const namedIso = s.match(
-            /"?(?:lastUpdateTime|systemTime|timestamp|eventTime|startTime|endTime|createdAt|updatedAt|CreationTime|identifiedAt)"?\s*:\s*"?([^",\s]+)"?/
+            /"?(?:created_at|systemTime|timestamp|eventTime|startTime|creationTime|createdAt|Begin|CreationTime|identifiedAt)"?\s*:\s*"?([^",\s]+)"?/
         );
         if (namedIso) {
-            const d = new Date(namedIso[1]);
-            if (!isNaN(d)) return d.getTime() + GMT8;
+            let value = namedIso[1];
+            let d = new Date(value);
+            if (Number.isNaN(d.getTime()) && /^\d+(\.\d+)?$/.test(value)) {
+                let timestamp = Number(value);
+                if (!Number.isNaN(timestamp)) {
+                    if (value.length <= 10) {
+                        // 10 位及以下认为是秒级时间戳
+                        timestamp = timestamp * 1000;
+                    }
+                    d = new Date(timestamp);
+                }
+            }
+            if (!Number.isNaN(d.getTime())) {
+                return d.getTime() + GMT8;
+            }
         }
 
         // ── P2：event_timestamp 字段（13 位毫秒 UTC）─────────────────────
-        const evtTs = s.match(/"event_timestamp"\s*:\s*(\d{13})/);
+        const evtTs = s.match(/"detection_timestamp"\s*:\s*(\d{13})/);
         if (evtTs) return parseInt(evtTs[1]) + GMT8;
         // ── P2.5：具名纳秒时间戳字段（19 位，÷1000000 转毫秒）────────────
         // 放在 P3 CEF rt= 之前，避免被后续 pattern 误处理
@@ -6025,11 +6096,32 @@ function checkAlertAge(logText, baseTimeStr, windowHours = 20) {
         if (/^\d{10}$/.test(s)) return parseInt(s) * 1000 + GMT8;
         if (/^\d{13}$/.test(s)) return parseInt(s) + GMT8;
 
+        // ── P9.5：syslog 行首快速提前匹配（避免被 P10 数字误抢）──────────
+        const syslogEarly = s.match(/^(\w{3})\s{1,2}(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})/);
+        if (syslogEarly) {
+            const mon = MONTH_MAP[syslogEarly[1].toLowerCase()];
+            if (mon !== undefined) {
+                const year = new Date().getUTCFullYear();
+                const ts =
+                    Date.UTC(
+                        year,
+                        mon,
+                        parseInt(syslogEarly[2]),
+                        parseInt(syslogEarly[3]),
+                        parseInt(syslogEarly[4]),
+                        parseInt(syslogEarly[5])
+                    ) + GMT8;
+                if (!isNaN(ts)) return ts;
+            }
+        }
         // ── P10：日志内嵌严格 10/13 位时间戳（排除 KV 字段数字、ID串）────
         const s_noKV = s
             .replace(/\b\w+=\d+\b/g, '') // 排除 key=数字
             .replace(/%\{[^}]+\}/g, '') // 排除 %{S-1-5-21-...} 形式 ID
-            .replace(/\b\d+-\d+-\d+[-\d]*\b/g, ''); // 排除 SID / 短横线分隔数字串
+            .replace(/\b\d+-\d+-\d+[-\d]*\b/g, '') // 排除 SID / 短横线分隔数字串
+            .replace(/[A-Za-z][\w.\-]*\d[\w.\-]*/g, '') // ← 新增：排除含字母的路径段/文件名（如 RADStudio-13-1-37-0-59082-...）
+            .replace(/\/\/[^\s]*/g, '') // ← 新增：排除路径内容（// 之后）
+            .replace(/[A-Z]:[\\\/][^\s]*/g, ''); // ← 新增：排除 Windows 路径（D:\... 之后）
         const emb13 = s_noKV.match(/(?<!\d)(\d{13})(?!\d)/);
         if (emb13) return { ts: parseInt(emb13[1]) + GMT8, matched: emb13[1] };
         const emb10 = s_noKV.match(/(?<!\d)(\d{10})(?!\d)/);
@@ -6360,9 +6452,12 @@ function RealTimeMonitoring() {
                 addButton('towhitelist', 'WhiteList', ToWhitelist);
             }
         }
-        let createtime_ticket = $('#created-val').text().trim();
-        let result = checkAlertAge(rawLog, createtime_ticket);
-        console.log('===', result);
+        let CheckOldLog_ = localStorage.getItem('CheckOldLog');
+        if (CheckOldLog_ != 0) {
+            let createtime_ticket = $('#created-val').text().trim();
+            let result = checkAlertAge(rawLog, createtime_ticket);
+            console.log('===', result);
+        }
     }
     const interval = setInterval(() => {
         const element = document.querySelector('#towhitelist');
