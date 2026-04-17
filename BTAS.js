@@ -267,6 +267,62 @@ function addCss() {
     }, 100); // 每100毫秒检查一次
 }
 
+function aggregateDescription(alertInfo, prefix) {
+    const alertDescriptions = [];
+    if (alertInfo.length <= 1) {
+        const info = alertInfo[0];
+        let desc = prefix;
+        Object.entries(info).forEach(([index, value]) => {
+            if (value !== undefined) {
+                desc += `${index}: ${value}\n`;
+            }
+        });
+        alertDescriptions.push(desc);
+    } else {
+        // 多条，聚合处理
+        const allKeys = Object.keys(alertInfo[0]);
+        const commonFields = {};
+        const diffKeys = [];
+        for (const key of allKeys) {
+            const values = alertInfo.map((a) => a[key]);
+            const allSame = values.every((v) => v === values[0]);
+            if (allSame && values[0] !== undefined) {
+                commonFields[key] = values[0];
+            } else {
+                diffKeys.push(key);
+            }
+        }
+        let desc = prefix;
+        Object.entries(commonFields).forEach(([key, value]) => {
+            desc += `${key}: ${value}\n`;
+        });
+        if (diffKeys.length > 0) {
+            // 对 diffKeys 中每个 key 的值先去重
+            const deduplicatedRows = [
+                ...new Map(
+                    alertInfo.map((info) => {
+                        const key = diffKeys
+                            .filter((k) => info[k] !== undefined && info[k] !== 'N/A')
+                            .map((k) => `${k}=${info[k]}`)
+                            .join(', ');
+                        return [key, info]; // 以拼接字符串为 key，自动去重
+                    })
+                ).values()
+            ];
+
+            deduplicatedRows.forEach((info) => {
+                const parts = diffKeys
+                    .filter((k) => info[k] !== undefined && info[k] !== 'N/A')
+                    .map((k) => `${k}=${info[k]}`)
+                    .join(', ');
+                desc += `  ${parts}\n`;
+            });
+        }
+        alertDescriptions.push(desc); // 整组只 push 一条
+    }
+    return alertDescriptions;
+}
+
 function showFlag(type, title, body, close) {
     AJS.flag({
         type: type,
@@ -2898,7 +2954,9 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             UserAgent,
                             ActorIpAddress,
                             DeviceProperties,
-                            UserKey
+                            UserKey,
+                            ResultStatus,
+                            AffectedItems
                         } = json_alert['office_365'];
                         let devicename = '';
                         if (DeviceProperties) {
@@ -2908,6 +2966,18 @@ function Risky_Countries_AlertHandler(...kwargs) {
                                 }
                             });
                         }
+                        let items = [];
+                        if (AffectedItems) {
+                            items = AffectedItems.map((item) => ({
+                                subject: item.Subject,
+                                InternetMessageId: item.InternetMessageId,
+                                Path: item.ParentFolder.Path
+                            }));
+                        }
+                        const unique = items.filter(
+                            (item, index, self) =>
+                                index === self.findIndex((t) => JSON.stringify(t) === JSON.stringify(item))
+                        );
                         alertExtraInfo = {
                             CreationEventTime: CreationTime ? CreationTime : undefined,
                             Operation: Operation ? Operation : undefined,
@@ -2918,7 +2988,9 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             UserAgent: UserAgent ? UserAgent : undefined,
                             DeviceName: devicename ? devicename : 'N/A',
                             UserKey: UserKey ? UserKey : undefined,
-                            ResultStatusDetail: ResultStatusDetail ? ResultStatusDetail : undefined
+                            ResultStatusDetail: ResultStatusDetail || undefined,
+                            ResultStatus: ResultStatus || undefined,
+                            AffectedItem: unique || undefined
                         };
                     }
 
@@ -2940,8 +3012,16 @@ function Risky_Countries_AlertHandler(...kwargs) {
             console.log('===info', info);
             let desc = `Observed ${summary.substr(lastindex + 1)}\n`;
             for (const key in info.alertExtraInfo) {
-                if (Object.hasOwnProperty.call(info.alertExtraInfo, key)) {
-                    const value = info.alertExtraInfo[key];
+                const value = info.alertExtraInfo[key];
+                if (Array.isArray(value)) {
+                    value.forEach((item, index) => {
+                        Object.keys(item).forEach((key) => {
+                            console.log(key, item[key]);
+                            desc += `${key}: ${item[key]}\n`;
+                        });
+                        desc += `\n`;
+                    });
+                } else {
                     if (value !== undefined && value !== 'N/A') {
                         if (key == 'CreationEventTime') {
                             desc += `CreationEventTime(<span class="red_highlight">GMT</span>): ${value}\n`;
@@ -5051,58 +5131,7 @@ function NetsKopeAlertHandler(...kwargs) {
     }
     function generateDescription() {
         const prefix = `Observed ${summary}\n`;
-        const alertDescriptions = [];
-        if (alertInfo.length <= 1) {
-            const info = alertInfo[0];
-            let desc = prefix;
-            Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined) {
-                    desc += `${index}: ${value}\n`;
-                }
-            });
-            alertDescriptions.push(desc);
-        } else {
-            // 多条，聚合处理
-            const allKeys = Object.keys(alertInfo[0]);
-            const commonFields = {};
-            const diffKeys = [];
-            for (const key of allKeys) {
-                const values = alertInfo.map((a) => a[key]);
-                const allSame = values.every((v) => v === values[0]);
-                if (allSame && values[0] !== undefined) {
-                    commonFields[key] = values[0];
-                } else {
-                    diffKeys.push(key);
-                }
-            }
-            let desc = prefix;
-            Object.entries(commonFields).forEach(([key, value]) => {
-                desc += `${key}: ${value}\n`;
-            });
-            if (diffKeys.length > 0) {
-                // 对 diffKeys 中每个 key 的值先去重
-                const deduplicatedRows = [
-                    ...new Map(
-                        alertInfo.map((info) => {
-                            const key = diffKeys
-                                .filter((k) => info[k] !== undefined && info[k] !== 'N/A')
-                                .map((k) => `${k}=${info[k]}`)
-                                .join(', ');
-                            return [key, info]; // 以拼接字符串为 key，自动去重
-                        })
-                    ).values()
-                ];
-
-                deduplicatedRows.forEach((info) => {
-                    const parts = diffKeys
-                        .filter((k) => info[k] !== undefined && info[k] !== 'N/A')
-                        .map((k) => `${k}=${info[k]}`)
-                        .join(', ');
-                    desc += `  ${parts}\n`;
-                });
-            }
-            alertDescriptions.push(desc); // 整组只 push 一条
-        }
+        let alertDescriptions = aggregateDescription(alertInfo, prefix);
         const alertMsg = alertDescriptions.join('\n');
         showDialog(alertMsg);
     }
@@ -5304,6 +5333,16 @@ function GoogleAlertHandler(...kwargs) {
                     }
                     acc.push(result);
                 }
+                if (summary.toLocaleLowerCase().includes('infrasys')) {
+                    let infrasys = JSON.parse(log)['infrasys'];
+                    let result = {
+                        created: infrasys['created'],
+                        alog_user_id: infrasys['alog_user_id'],
+                        alog_desc: infrasys['alog_desc']
+                    };
+
+                    acc.push(result);
+                }
                 raw_alert += 1;
             } catch (error) {
                 console.log(`Error: ${error}`);
@@ -5320,19 +5359,24 @@ function GoogleAlertHandler(...kwargs) {
         });
     }
     function generateDescription() {
-        const alertDescriptions = [];
-        for (const info of alertInfo) {
-            let desc = `Observed ${summary.split(']').at(-1)}\n`;
-            Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && value !== ' ' && index != 'Summary') {
-                    if (index == 'createtime') {
-                        desc += `<strong>createtime(<span class="red_highlight">GMT</span>):</strong> ${value}\n`;
-                    } else {
-                        desc += `<strong>${index}:</strong> ${value}\n`;
+        let alertDescriptions;
+        let desc = `Observed ${summary.split(']').at(-1)}\n`;
+        if (summary.toLocaleLowerCase().includes('infrasys')) {
+            alertDescriptions = aggregateDescription(alertInfo, desc);
+        } else {
+            alertDescriptions = [];
+            for (const info of alertInfo) {
+                Object.entries(info).forEach(([index, value]) => {
+                    if (value !== undefined && value !== ' ' && index != 'Summary') {
+                        if (index == 'createtime') {
+                            desc += `<strong>createtime(<span class="red_highlight">GMT</span>):</strong> ${value}\n`;
+                        } else {
+                            desc += `<strong>${index}:</strong> ${value}\n`;
+                        }
                     }
-                }
-            });
-            alertDescriptions.push(desc);
+                });
+                alertDescriptions.push(desc);
+            }
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
         showDialog(alertMsg);
@@ -6003,7 +6047,7 @@ function checkAlertAge(logText, baseTimeStr, windowHours = 20) {
 
         // ── P1：指定 JSON 字段（ISO 8601 UTC）────────────────────────────
         const namedIso = s.match(
-            /"?(?:created_at|systemTime|timestamp|eventTime|startTime|creationTime|createdAt|Begin|CreationTime|identifiedAt)"?\s*:\s*"?([^",\s]+)"?/
+            /"?(?:created_at|systemTime|timestamp|eventTime|startTime|creationTime|createdAt|Begin|CreationTime|identifiedAt)"?\s*:\s*"?(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?|\d+(?:\.\d+)?)"?/
         );
         if (namedIso) {
             let value = namedIso[1];
@@ -6396,9 +6440,9 @@ function RealTimeMonitoring() {
                 });
             }
             const No_Decoder_handlers = {
-                'detect aad, o365 sign-in from risky countries': Risky_Countries_AlertHandler,
+                // 'detect aad, o365 sign-in from risky countries': Risky_Countries_AlertHandler,
                 'o365 login from malware-ip': Risky_Countries_AlertHandler,
-                'rarely country signin from o365': Risky_Countries_AlertHandler,
+                // 'rarely country signin from o365': Risky_Countries_AlertHandler,
                 'agent disconnected': Agent_Disconnect_AlertHandler,
                 'suspicious geolocation ip login success': PulseAlertHandler,
                 'login success from malware ip(s)': ThreatMatrixAlertHandler,
@@ -6416,7 +6460,8 @@ function RealTimeMonitoring() {
                 'incoming admin protocol used': FortigateAlertHandler,
                 'abnormally large outgoing accept traffic': FortigateAlertHandler,
                 'windows multiple accounts lockout within a short period': WineventAlertHandler,
-                'splunk alert:  sentinelone': SplunkAlertHandler
+                'splunk alert:  sentinelone': SplunkAlertHandler,
+                'infrasys': GoogleAlertHandler
             };
             let No_Decoder_handler = null;
             Object.keys(No_Decoder_handlers).forEach((key) => {
@@ -6434,6 +6479,11 @@ function RealTimeMonitoring() {
             }
             if (No_Decoder_handler !== null) {
                 No_Decoder_handler({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: summary });
+            }
+
+            let LogSource = $('#customfield_10204-val').text().trim().toLowerCase();
+            if (LogSource == 'office_365') {
+                Risky_Countries_AlertHandler({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: summary });
             }
             if (LogSourceDomain == '') {
                 LogSourceDomain = $('#customfield_10846-val').text().trim();
