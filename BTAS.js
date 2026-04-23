@@ -6,8 +6,8 @@
 // @description  Blue Team Auxiliary Script
 // @author       Barry, Jack, Xingyu, Mike
 // @license      Apache-2.0
-// @updateURL    https://raw.githubusercontent.com/yinqinghe/BTAS/refs/heads/main/BTAS.js
-// @downloadURL  https://raw.githubusercontent.com/yinqinghe/BTAS/refs/heads/main/BTAS.js
+// @updateURL    http://proxy.mike.dpdns.org/yinqinghe/BTAS/refs/heads/main/BTAS.js
+// @downloadURL  http://proxy.mike.dpdns.org/yinqinghe/BTAS/refs/heads/main/BTAS.js
 // @match        https://login.microsoftonline.com/*
 // @match        https://security.microsoft.com/*
 // @include      https://caas*.com/*
@@ -285,7 +285,13 @@ function aggregateDescription(alertInfo, prefix) {
         const diffKeys = [];
         for (const key of allKeys) {
             const values = alertInfo.map((a) => a[key]);
-            const allSame = values.every((v) => v === values[0]);
+            const normalizeArray = (arr) => [...arr].sort().join('||');
+            const allSame = values.every((v) => {
+                if (Array.isArray(v) && Array.isArray(values[0])) {
+                    return normalizeArray(v) === normalizeArray(values[0]);
+                }
+                return v === values[0];
+            });
             if (allSame && values[0] !== undefined) {
                 commonFields[key] = values[0];
             } else {
@@ -297,26 +303,48 @@ function aggregateDescription(alertInfo, prefix) {
             desc += `${key}: ${value}\n`;
         });
         if (diffKeys.length > 0) {
-            // 对 diffKeys 中每个 key 的值先去重
-            const deduplicatedRows = [
-                ...new Map(
-                    alertInfo.map((info) => {
-                        const key = diffKeys
-                            .filter((k) => info[k] !== undefined && info[k] !== 'N/A')
-                            .map((k) => `${k}=${info[k]}`)
-                            .join(', ');
-                        return [key, info]; // 以拼接字符串为 key，自动去重
-                    })
-                ).values()
-            ];
+            const skipDedupeKeys = new Set(['datetime', 'srcip']);
 
-            deduplicatedRows.forEach((info) => {
-                const parts = diffKeys
+            // 按非时间字段分组
+            const groupMap = new Map();
+            for (const info of alertInfo) {
+                const key = diffKeys
+                    .filter((k) => !skipDedupeKeys.has(k))
                     .filter((k) => info[k] !== undefined && info[k] !== 'N/A')
                     .map((k) => `${k}=${info[k]}`)
                     .join(', ');
-                desc += `  ${parts}\n`;
-            });
+                if (!groupMap.has(key)) groupMap.set(key, []);
+                groupMap.get(key).push(info);
+            }
+
+            // 渲染每组
+            for (const [, rows] of groupMap) {
+                if (rows.length === 1) {
+                    // 单行，正常展示
+                    const parts = diffKeys
+                        .filter((k) => rows[0][k] !== undefined && rows[0][k] !== 'N/A')
+                        .map((k) => `${k}=${rows[0][k]}`)
+                        .join(', ');
+                    desc += `  ${parts}\n`;
+                } else {
+                    // 多行：先展示公共的非时间字段
+                    const sharedParts = diffKeys
+                        .filter((k) => !skipDedupeKeys.has(k))
+                        .filter((k) => rows[0][k] !== undefined && rows[0][k] !== 'N/A')
+                        .map((k) => `${k}:${rows[0][k]}`)
+                        .join(', \n');
+                    desc += `${sharedParts}\n`;
+
+                    // 再逐行展示 datetime 和 srcip
+                    for (const row of rows) {
+                        const timeParts = [...skipDedupeKeys]
+                            .filter((k) => row[k] !== undefined && row[k] !== 'N/A')
+                            .map((k) => `${k}=${row[k]}`)
+                            .join(', ');
+                        desc += `${timeParts}\n`;
+                    }
+                }
+            }
         }
         alertDescriptions.push(desc); // 整组只 push 一条
     }
@@ -1798,7 +1826,6 @@ function FortigateAlertHandler(...kwargs) {
         return extract_alert_infos;
     }
     let extract_alert_infos = '';
-    const cachedMappingContent = GM_getValue('cachedMappingContent', null);
     if (DecoderName == 'sonicwall') {
         extract_alert_infos = ExtractAlertInfo_sonicwall(alertInfos);
     } else {
@@ -1811,23 +1838,29 @@ function FortigateAlertHandler(...kwargs) {
         });
     }
     function generateDescription() {
-        const alertDescriptions = [];
-
-        for (const info of extract_alert_infos) {
-            let desc = '';
-            if (LogSourceDomain == cachedMappingContent['kka']) {
-                desc = `观察到 ${summary}\n`;
-            } else {
-                desc = `Observed ${summary}\n`;
-            }
-            Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined) {
-                    desc += `${index}: ${value}\n`;
+        let alertDescriptions = [];
+        const text = summary.toLowerCase();
+        const keywords = ['vpn multiple login failure with same ip', 'newly registered domain'];
+        if (keywords.some((keyword) => text.includes(keyword))) {
+            const prefix = `Observed ${summary}\n`;
+            alertDescriptions = aggregateDescription(extract_alert_infos, prefix);
+        } else {
+            for (const info of extract_alert_infos) {
+                let desc = '';
+                if (LogSourceDomain == cachedMappingContent['kka']) {
+                    desc = `观察到 ${summary}\n`;
+                } else {
+                    desc = `Observed ${summary}\n`;
                 }
-            });
-
-            alertDescriptions.push(desc);
+                Object.entries(info).forEach(([index, value]) => {
+                    if (value !== undefined) {
+                        desc += `${index}: ${value}\n`;
+                    }
+                });
+                alertDescriptions.push(desc);
+            }
         }
+
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
         showDialog(alertMsg);
     }
@@ -2079,6 +2112,9 @@ function AwsAlertHandler(...kwargs) {
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
             try {
+                if (log.length == 0) {
+                    return acc;
+                }
                 const { aws } = JSON.parse(log);
                 if (DecoderName == 'aws-guardduty') {
                     let EventTime = aws.service.eventFirstSeen.split('.')[0] + 'Z';
@@ -2186,6 +2222,16 @@ function AwsAlertHandler(...kwargs) {
                         'user-agent': headersDict['user-agent'],
                         'host': host,
                         'content_type': content
+                    });
+                } else if (aws.source == 'waf') {
+                    acc.push({
+                        'EventTime': formatCurrentDateTime(aws?.timestamp, 'xxx'),
+                        'action': aws?.action || aws?.action,
+                        'clientIp': aws?.httpRequest.clientIp,
+                        'country': aws?.httpRequest.country,
+                        'uri': aws?.httpRequest.uri,
+                        'host': aws?.httpRequest.host,
+                        'User-Agent': aws?.httpRequest.headers.find((h) => h.name.toLowerCase() === 'user-agent')?.value
                     });
                 } else {
                     let accessKeyId = aws?.userIdentity?.accessKeyId;
@@ -3006,11 +3052,10 @@ function Risky_Countries_AlertHandler(...kwargs) {
     const alertInfo = parseLog(rawLog);
 
     function generateDescription() {
+        let title = $('#customfield_10302-val').text().trim();
         const alertDescriptions = [];
         for (const info of alertInfo) {
-            const lastindex = summary.lastIndexOf(']');
-            console.log('===info', info);
-            let desc = `Observed ${summary.substr(lastindex + 1)}\n`;
+            let desc = `Observed ${title.split(':')[0]}\n`;
             for (const key in info.alertExtraInfo) {
                 const value = info.alertExtraInfo[key];
                 if (Array.isArray(value)) {
@@ -5720,7 +5765,7 @@ function formatCurrentDateTime(dateStr, decoder_name) {
     if (dateStr) {
         var date = new Date(dateStr);
         var localOffset = date.getTimezoneOffset();
-        if (['impervainc_cef', 'checkpoint_cef', 'darktrace-json', 'cloudflare-json'].includes(decoder_name)) {
+        if (['impervainc_cef', 'checkpoint_cef', 'darktrace-json', 'cloudflare-json', 'xxx'].includes(decoder_name)) {
             var targetDate = new Date(date.getTime() + (480 + localOffset) * 60000);
         } else {
             var targetDate = new Date(date.getTime() + (960 + localOffset) * 60000);
@@ -5939,26 +5984,6 @@ function TicketProcessingStandards(...kwargs) {
             showPopup(msg);
         });
     }
-    const timer_update = setInterval(function () {
-        var btn_update = document.getElementById('action_id_121');
-        if (btn_update && !btn_update.dataset.bound) {
-            clearInterval(timer_update);
-            console.log('===btn_update', btn_update);
-            btn_update.dataset.bound = 'true'; // 添加标记，避免重复绑定事件
-            // btn_update.addEventListener('click', function (event) {
-            //     let get_pass = Verify_escalate(cachedLogsourcedomainOorg);
-            //     console.log('===get_pass', get_pass);
-            //     if (get_pass) {
-            //         console.log('===binggo');
-            //         // alert('ORG填写正确');
-            //         event.preventDefault(); // 阻止默认行为
-            //     } else {
-            //         alert('ORG填写错误， 若检查后确认无误，需暂时关闭BTAS，并反馈给Mike/Barry');
-            //         event.preventDefault(); // 阻止默认行为
-            //     }
-            // });
-        }
-    }, 1000);
 }
 
 const MONTH_MAP = {
@@ -6047,7 +6072,7 @@ function checkAlertAge(logText, baseTimeStr, windowHours = 20) {
 
         // ── P1：指定 JSON 字段（ISO 8601 UTC）────────────────────────────
         const namedIso = s.match(
-            /"?(?:created_at|systemTime|timestamp|eventTime|startTime|creationTime|createdAt|Begin|CreationTime|identifiedAt)"?\s*:\s*"?(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?|\d+(?:\.\d+)?)"?/
+            /"?(?:created_at|systemTime|timestamp|eventTime|startTime|creationTime|Begin|CreationTime)"?\s*:\s*"?(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?|\d+(?:\.\d+)?)"?/
         );
         if (namedIso) {
             let value = namedIso[1];
@@ -6484,6 +6509,9 @@ function RealTimeMonitoring() {
             let LogSource = $('#customfield_10204-val').text().trim().toLowerCase();
             if (LogSource == 'office_365') {
                 Risky_Countries_AlertHandler({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: summary });
+            }
+            if (LogSource.includes('aws-waf')) {
+                AwsAlertHandler({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: summary });
             }
             if (LogSourceDomain == '') {
                 LogSourceDomain = $('#customfield_10846-val').text().trim();
