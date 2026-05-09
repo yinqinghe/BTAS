@@ -1318,6 +1318,7 @@ function cortexAlertHandler(...kwargs) {
                         action
                     });
                 } else {
+                    // 从 cortex_xdr 中提取所有需要的字段
                     const {
                         action_local_ip,
                         action_remote_ip,
@@ -1346,95 +1347,52 @@ function cortexAlertHandler(...kwargs) {
                         user_name,
                         alert_link
                     } = cortex_xdr;
-                    const action_list = {
-                        action_file_path,
-                        action_file_sha256,
-                        action_process_signature_status,
-                        action_process_image_sha256,
-                        action_process_image_command_line
-                    };
-                    const actor_list = {
-                        actor_process_signature_status,
-                        actor_process_image_path,
-                        actor_process_image_sha256,
-                        actor_process_command_line
-                    };
-                    const causality_actor_list = {
-                        causality_actor_process_signature_status,
-                        causality_actor_process_command_line,
-                        causality_actor_process_image_path,
-                        causality_actor_process_image_sha256
-                    };
-                    const os_actor_list = {
-                        os_actor_process_signature_status,
-                        os_actor_process_image_path,
-                        os_actor_process_command_line,
-                        os_actor_process_image_sha256
-                    };
 
-                    function countValidProperties(obj) {
-                        const validPropsCount = Object.keys(obj).reduce((count, key) => {
-                            if (obj[key] !== undefined) {
-                                count++;
-                            }
-                            return count;
-                        }, 0);
-                        return validPropsCount;
+                    // 判断一个候选来源是否有实质内容（至少有 filepath 或 cmd 之一）
+                    function isValidCandidate(candidate) {
+                        return !!(candidate.filepath || candidate.cmd);
                     }
 
-                    const actionPropsCount = countValidProperties(action_list)
-                        ? countValidProperties(action_list) + 1
-                        : 0;
-                    const actorPropsCount = countValidProperties(actor_list);
-                    const causalityPropsCount = countValidProperties(causality_actor_list);
-                    const osPropsCount = countValidProperties(os_actor_list);
-                    const maxCount = Math.max(actionPropsCount, actorPropsCount, causalityPropsCount, osPropsCount);
+                    // 按语义优先级定义候选列表，顺序即优先级
+                    const candidates = [
+                        {
+                            name: 'action',
+                            sha256: action_file_sha256 || action_process_image_sha256,
+                            file_signature_status: action_process_signature_status,
+                            filepath: action_file_path,
+                            cmd: action_process_image_command_line
+                        },
+                        {
+                            name: 'actor',
+                            sha256: actor_process_image_sha256,
+                            file_signature_status: actor_process_signature_status,
+                            filepath: actor_process_image_path,
+                            cmd: actor_process_command_line
+                        },
+                        {
+                            name: 'causality',
+                            sha256: causality_actor_process_image_sha256,
+                            file_signature_status: causality_actor_process_signature_status,
+                            filepath: causality_actor_process_image_path,
+                            cmd: causality_actor_process_command_line
+                        },
+                        {
+                            name: 'os',
+                            sha256: os_actor_process_image_sha256,
+                            file_signature_status: os_actor_process_signature_status,
+                            filepath: os_actor_process_image_path,
+                            cmd: os_actor_process_command_line
+                        }
+                    ];
 
-                    const action_cmd_length = action_process_image_command_line
-                        ? action_process_image_command_line.length
-                        : 0;
-                    const actor_cmd_length = actor_process_command_line ? actor_process_command_line.length : 0;
-                    const causality_cmd_length = causality_actor_process_command_line
-                        ? causality_actor_process_command_line.length
-                        : 0;
-                    const os_cmd_length = os_actor_process_command_line ? os_actor_process_command_line.length : 0;
-                    const lengths = [action_cmd_length, actor_cmd_length, causality_cmd_length, os_cmd_length];
-                    const maxLength = Math.max(...lengths);
+                    // 按优先级依次检查，取第一个有实质内容的候选
+                    const best = candidates.find(isValidCandidate);
 
-                    let file_signature_status;
-                    let filepath;
-                    let sha256;
-                    let cmd;
-
-                    if (action_cmd_length === maxLength && actionPropsCount === maxCount) {
-                        if (!WhiteFilehash(action_file_sha256 || action_process_image_sha256)) {
-                            sha256 = action_file_sha256 || action_process_image_sha256;
-                        }
-                        file_signature_status = action_process_signature_status;
-                        filepath = action_file_path;
-                        cmd = action_process_image_command_line;
-                    } else if (actor_cmd_length === maxLength && actorPropsCount === maxCount) {
-                        if (!WhiteFilehash(actor_process_image_sha256)) {
-                            sha256 = actor_process_image_sha256;
-                        }
-                        file_signature_status = actor_process_signature_status;
-                        filepath = actor_process_image_path;
-                        cmd = actor_process_command_line;
-                    } else if (causality_cmd_length === maxLength && causalityPropsCount === maxCount) {
-                        if (!WhiteFilehash(causality_actor_process_image_sha256)) {
-                            sha256 = causality_actor_process_image_sha256;
-                        }
-                        file_signature_status = causality_actor_process_signature_status;
-                        filepath = causality_actor_process_image_path;
-                        cmd = causality_actor_process_command_line;
-                    } else if (os_actor_process_image_path && osPropsCount === maxCount) {
-                        if (!WhiteFilehash(os_actor_process_image_sha256)) {
-                            sha256 = os_actor_process_image_sha256;
-                        }
-                        file_signature_status = os_actor_process_signature_status;
-                        filepath = os_actor_process_image_path;
-                        cmd = os_actor_process_command_line;
-                    }
+                    // 如果所有来源均为空，best 为 undefined，做好兜底
+                    const file_signature_status = best?.file_signature_status;
+                    const filepath = best?.filepath;
+                    const cmd = best?.cmd;
+                    const sha256 = best?.sha256 && !WhiteFilehash(best.sha256) ? best.sha256 : undefined;
 
                     alertInfo.push({
                         ...alert,
@@ -3000,9 +2958,10 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             UserAgent,
                             ActorIpAddress,
                             DeviceProperties,
-                            UserKey,
                             ResultStatus,
-                            AffectedItems
+                            AffectedItems,
+                            ForwardingSmtpAddress,
+                            AppPoolName
                         } = json_alert['office_365'];
                         let devicename = '';
                         if (DeviceProperties) {
@@ -3028,12 +2987,13 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             CreationEventTime: CreationTime ? CreationTime : undefined,
                             Operation: Operation ? Operation : undefined,
                             Workload: Workload ? Workload : undefined,
+                            AppPoolName: AppPoolName ? AppPoolName : undefined,
                             UserId: UserId ? UserId : undefined,
                             ClientIP: ClientIP ? ClientIP : undefined,
                             ActorIpAddress: ActorIpAddress ? ActorIpAddress : undefined,
                             UserAgent: UserAgent ? UserAgent : undefined,
                             DeviceName: devicename ? devicename : 'N/A',
-                            UserKey: UserKey ? UserKey : undefined,
+                            ForwardingSmtpAddress: ForwardingSmtpAddress ? ForwardingSmtpAddress : undefined,
                             ResultStatusDetail: ResultStatusDetail || undefined,
                             ResultStatus: ResultStatus || undefined,
                             AffectedItem: unique || undefined
@@ -6072,7 +6032,7 @@ function checkAlertAge(logText, baseTimeStr, windowHours = 20) {
 
         // ── P1：指定 JSON 字段（ISO 8601 UTC）────────────────────────────
         const namedIso = s.match(
-            /"?(?:created_at|systemTime|timestamp|eventTime|startTime|creationTime|Begin|CreationTime)"?\s*:\s*"?(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?|\d+(?:\.\d+)?)"?/
+            /"?(?:created_at|systemTime|timestamp|eventTime|startTime|creationTime|Begin|CreationTime|updatedAt)"?\s*:\s*"?(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?|\d+(?:\.\d+)?)"?/
         );
         if (namedIso) {
             let value = namedIso[1];
