@@ -3239,8 +3239,7 @@ function AlicloudAlertHandler(...kwargs) {
                             request_method: request_method ? request_method : undefined,
                             request_uri: request_uri ? request_uri : undefined
                         };
-                        console.log('===', requestParameters, time);
-
+                        let LogSource = $('#customfield_10204-val').text().trim();
                         if (detail != undefined) {
                             detail = JSON.parse(detail);
                             alertExtraInfo = Object.assign({}, alertExtraInfo, detail);
@@ -3248,7 +3247,7 @@ function AlicloudAlertHandler(...kwargs) {
                         if (requestParameters != undefined) {
                             alertExtraInfo = Object.assign({}, alertExtraInfo, requestParameters);
                         }
-                        console.log(alertExtraInfo);
+                        alertExtraInfo['Logsource'] = LogSource;
                         acc.push({ alertExtraInfo });
                     } catch (error) {
                         console.log('Unable to parse JSON data, handling exception: ' + error);
@@ -5250,6 +5249,8 @@ function GoogleAlertHandler(...kwargs) {
                 if (log.length == 0) {
                     return acc;
                 }
+                let result = {};
+
                 if (DecoderName == 'google-api-json') {
                     let log_ = JSON.parse(log);
                     let result;
@@ -5311,8 +5312,6 @@ function GoogleAlertHandler(...kwargs) {
                     let watchtowr = JSON.parse(log)['watchtowr'];
                     let wt_poi = JSON.parse(log)['wt_poi'];
                     let wt_hunt = JSON.parse(log)['wt_hunt'];
-
-                    let result = {};
                     if (watchtowr) {
                         result['createtime'] = watchtowr['created_at'].split('.')[0] + 'Z';
                         result['title'] = watchtowr['title'];
@@ -5338,9 +5337,28 @@ function GoogleAlertHandler(...kwargs) {
                     }
                     acc.push(result);
                 }
+                if (DecoderName == 'prisma-runtime-security') {
+                    let runtime = JSON.parse(log)['runtime'];
+                    result = {
+                        createtime: runtime.time,
+                        hostname: runtime.hostname,
+                        msg: runtime.msg,
+                        url: runtime.url,
+                        requestHost: runtime.requestHost,
+                        userAgent: runtime.userAgentHeader,
+                        srcip: runtime.subnet,
+                        country: runtime.country,
+                        statusCode: runtime.statusCode,
+                        containerName: runtime.containerName,
+                        provider: runtime.provider,
+                        protection: runtime.protection
+                    };
+                    acc.push(result);
+                    console.log('===', acc);
+                }
                 if (summary.toLocaleLowerCase().includes('infrasys')) {
                     let infrasys = JSON.parse(log)['infrasys'];
-                    let result = {
+                    result = {
                         created: infrasys['created'],
                         alog_user_id: infrasys['alog_user_id'],
                         alog_desc: infrasys['alog_desc']
@@ -5371,6 +5389,7 @@ function GoogleAlertHandler(...kwargs) {
         } else {
             alertDescriptions = [];
             for (const info of alertInfo) {
+                desc = `Observed ${summary.split(']').at(-1)}\n`;
                 Object.entries(info).forEach(([index, value]) => {
                     if (value !== undefined && value !== ' ' && index != 'Summary') {
                         if (index == 'createtime') {
@@ -6402,7 +6421,8 @@ function RealTimeMonitoring() {
                 'bigdata-hive-cef': CheckPointEmailHandler,
                 'arista_cef': SangforAlertHandler,
                 'networkbox': SangforAlertHandler,
-                'windows': NetsKopeAlertHandler
+                'windows': NetsKopeAlertHandler,
+                'prisma-runtime-security': GoogleAlertHandler
             };
             if (DecoderName.includes('m365-defender-json')) {
                 let decoder_name = [];
