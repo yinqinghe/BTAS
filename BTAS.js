@@ -2291,11 +2291,13 @@ function AzureAlertHandler(...kwargs) {
                 acc.push({
                     AlertType: eventhub['AlertType'],
                     StartTimeUtc: eventhub['StartTimeUtc'],
+                    timeStamp: eventhub['timeStamp'],
                     Severity: eventhub['Severity'],
                     Intent: eventhub['Intent'],
                     Description: eventhub['Description'],
                     summary: azure['ThreatDescription'] || eventhub['AlertDisplayName'],
                     Protocol: azure['Protocol'],
+                    clientIp: azure['clientIp'],
                     SourceIP: azure['SourceIp'],
                     SourcePort: azure['SourcePort'],
                     DestinationIp: azure['DestinationIp'],
@@ -2305,14 +2307,16 @@ function AzureAlertHandler(...kwargs) {
                     ExtendedProperties: JSON.stringify(ExtendedProperties, null, 4),
                     ...entities,
                     alerturi: eventhub['AlertUri'],
-                    timeStamp: eventhub['timeStamp'],
                     clientIP: azure['clientIP'],
                     instanceId: azure['instanceId'],
                     requestUri: azure['requestUri'],
                     requestQuery: azure['requestQuery'],
                     userAgent: azure['userAgent'],
                     httpStatus: azure['httpStatus'],
-                    originalHost: azure['originalHost']
+                    hostname: azure['hostname'],
+                    originalHost: azure['originalHost'],
+                    engine: azure['engine'],
+                    message: azure['message']
                 });
             } catch (error) {
                 console.log(`Error: ${error}`);
@@ -4995,6 +4999,21 @@ function NetsKopeAlertHandler(...kwargs) {
                     };
                     acc.push(result);
                 }
+                if (DecoderName == 'mcafee_security_manager') {
+                    // 定义正则表达式，使用命名捕获组提取核心字段
+                    const regex =
+                        /^\w+\s+\d+\s+[\d:]+\s+SyslogAlertForwarder:\s+(?<event_time>\w+\s+\d+,\s+\d+\s+[\d:]+)\s+:\s+\w+\s+detected\s+(?<direction>\w+)\s+attack\s+(?<protocol>\w+):\s+(?<vuln_name>.+?)\s*\(severity\s*=\s*(?<severity>\w+)\)\.\s+(?<src_ip>[\d.]+):(?<src_port>\d+)\s+->\s+(?<dst_ip>[\d.]+):(?<dst_port>\d+)\s+\(result\s*=\s*(?<result>\w+)\)/;
+                    const match = log.match(regex);
+
+                    if (match) {
+                        // 直接获取键值对对象
+                        const result = match.groups;
+                        console.log(result);
+                        acc.push(result);
+                    } else {
+                        console.log('未匹配到关键信息');
+                    }
+                }
                 if (DecoderName == 'windows') {
                     const result = {};
                     const headerMatch = log.match(/^([\d\s\w:]+)\s+WinEvtLog:.*?AUDIT_FAILURE\((\d+)\)/);
@@ -5294,6 +5313,7 @@ function GoogleAlertHandler(...kwargs) {
                         AccountType: PTSE.AccountType,
                         Account: PTSE.Account,
                         Activity: PTSE.Activity,
+                        ParentProcessName: PTSE.ParentProcessName,
                         CommandLine: PTSE.CommandLine,
                         SourceSystem: PTSE.SourceSystem,
                         TargetAccount: PTSE.TargetAccount,
@@ -5421,23 +5441,27 @@ function GemsAlertHandler(...kwargs) {
         });
     }
     function generateDescription() {
-        const alertDescriptions = [];
-        for (const info of alertInfo) {
-            let desc = `Observed ${summary.split(']').at(-1)}\n`;
-            if (typeof info === 'object') {
-                Object.entries(info).forEach(([index, value]) => {
-                    if (value !== undefined) {
-                        if (index == 'createtime') {
-                            desc += `<strong>createtime(<span class="red_highlight">GMT</span>):</strong> ${value}\n`;
-                        } else {
-                            desc += `<strong>${index}:</strong> ${value}\n`;
+        let alertDescriptions = [];
+        let desc = `Observed ${summary.split(']').at(-1)}\n`;
+        if (summary.toLocaleLowerCase().includes('gems2')) {
+            alertDescriptions = aggregateDescription(alertInfo, desc);
+        } else {
+            for (const info of alertInfo) {
+                if (typeof info === 'object') {
+                    Object.entries(info).forEach(([index, value]) => {
+                        if (value !== undefined) {
+                            if (index == 'createtime') {
+                                desc += `<strong>createtime(<span class="red_highlight">GMT</span>):</strong> ${value}\n`;
+                            } else {
+                                desc += `<strong>${index}:</strong> ${value}\n`;
+                            }
                         }
-                    }
-                });
-            } else {
-                desc += info + '\n';
+                    });
+                } else {
+                    desc += info + '\n';
+                }
+                alertDescriptions.push(desc);
             }
-            alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
         showDialog(alertMsg);
@@ -6370,7 +6394,8 @@ function RealTimeMonitoring() {
                 'networkbox': SangforAlertHandler,
                 'windows': NetsKopeAlertHandler,
                 'prisma-runtime-security': GoogleAlertHandler,
-                'playtechsecurityevents': GoogleAlertHandler
+                'playtechsecurityevents': GoogleAlertHandler,
+                'mcafee_security_manager': NetsKopeAlertHandler
             };
             if (DecoderName.includes('m365-defender-json')) {
                 let decoder_name = [];
