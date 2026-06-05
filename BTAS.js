@@ -268,6 +268,8 @@ function addCss() {
 }
 
 function aggregateDescription(alertInfo, prefix) {
+    // 判断值是否为空/无效
+    const isEmptyValue = (v) => v === undefined || v === null || v === 'None' || v === 'N/A' || v === '';
     const alertDescriptions = [];
     if (alertInfo.length <= 1) {
         const info = alertInfo[0];
@@ -292,7 +294,10 @@ function aggregateDescription(alertInfo, prefix) {
                 }
                 return v === values[0];
             });
-            if (allSame && values[0] !== undefined) {
+            if (isEmptyValue(values[0])) {
+                continue;
+            }
+            if (allSame) {
                 commonFields[key] = values[0];
             } else {
                 diffKeys.push(key);
@@ -303,7 +308,7 @@ function aggregateDescription(alertInfo, prefix) {
             desc += `${key}: ${value}\n`;
         });
         if (diffKeys.length > 0) {
-            const skipDedupeKeys = new Set(['datetime', 'srcip']);
+            const skipDedupeKeys = new Set(['datetime', 'srcip', 'created']);
 
             // 按非时间字段分组
             const groupMap = new Map();
@@ -314,7 +319,10 @@ function aggregateDescription(alertInfo, prefix) {
                     .map((k) => `${k}=${info[k]}`)
                     .join(', ');
                 if (!groupMap.has(key)) groupMap.set(key, []);
-                groupMap.get(key).push(info);
+                const isDuplicate = groupMap
+                    .get(key)
+                    .some((existing) => JSON.stringify(existing) === JSON.stringify(info));
+                if (!isDuplicate) groupMap.get(key).push(info);
             }
 
             // 渲染每组
@@ -383,7 +391,12 @@ function showFlag(type, title, body, close) {
  */
 function showDialog(body) {
     // avoid editor treat double backslash as breakline and avoid xss attack
-    body = DOMPurify.sanitize(body.replace(/\\\\/g, '\\'));
+    body = body.replace(/\\\\/g, '\\');
+    // 2. 将制表符 \t 替换为 4 个不换行空格 (\u00a0)
+    body = body.replace(/\t/g, '\u00a0\u00a0\u00a0\u00a0');
+
+    // 3. 然后再进行安全过滤
+    body = DOMPurify.sanitize(body);
 
     // Create custom dialog style
     const customDialogContent = AJS.$(`<section
@@ -1573,15 +1586,32 @@ function WineventAlertHandler(...kwargs) {
     let host_name = rawLog_debug_json?.agent?.name || '';
 
     summary = summary.replace(/[\[(].*?[\])]/g, '');
+    let messages = '';
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
             try {
+                if (log.length == 0) {
+                    return acc;
+                }
                 const { win } = JSON.parse(log);
                 raw_alert += 1;
                 const { eventdata, system } = win;
                 const alertHost = system.computer;
-                const systemTime = system.systemTime;
-                acc.push({ systemTime, summary, alertHost, eventdata, host_ip });
+                let systemTime = system.systemTime;
+                systemTime = new Date(systemTime.split('.')[0]);
+                systemTime.setHours(systemTime.getHours() + 16);
+                systemTime = systemTime.toISOString().split('.')[0];
+                let eventID = system.eventID;
+
+                const content = (system?.message || '').replace(/^"|"$/g, '');
+                const lines = content.split(/\r?\n/);
+                const message = lines[0] || '';
+                if (message != '') {
+                    messages += (system?.message || '').replace(/^"|"$/g, '');
+                    messages +=
+                        '\n--------------------------------------------------------------------------------------\n';
+                }
+                acc.push({ systemTime, alertHost, ...eventdata, host_ip, eventID, message });
             } catch (error) {
                 console.error(`Error: ${error.message}`);
             }
@@ -1590,48 +1620,54 @@ function WineventAlertHandler(...kwargs) {
         return alertInfo;
     }
     const alertInfo = parseLog(rawLog);
+    console.log('===', alertInfo);
+
     if (raw_alert < num_alert) {
         AJS.banner({
             body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
         });
     }
     function generateDescription() {
-        const cachedMappingContent = GM_getValue('cachedMappingContent', null);
-        const alertDescriptions = [];
-        if (LogSourceDomain == cachedMappingContent['gga']) {
-            alertDescriptions.push(`Log Details:\n`);
-        }
-        for (const info of alertInfo) {
-            let desc = `Observed${info.summary}\nHost: ${info.alertHost}\n`;
-            if (info.host_ip) {
-                desc += `Host_IP: ${info.host_ip}\n`;
-            }
-            const date = new Date(info.systemTime.split('.')[0]);
-            date.setHours(date.getHours() + 16);
-            desc += `systemTime(<span class="red_highlight">UTC+8</span>): ${date.toISOString().split('.')[0]}\n`;
-            for (const key in info.eventdata) {
-                if (Object.hasOwnProperty.call(info.eventdata, key)) {
-                    const value = info.eventdata[key];
-                    if (value !== undefined && value !== '') {
-                        desc += `${key}: ${value}\n`;
+        let alertDescriptions;
+        let desc = `Observed ${summary.split(']').at(-1)}\n`;
+        if (
+            summary.toLocaleLowerCase().includes('possible password spraying attacks') ||
+            summary.toLocaleLowerCase().includes('concurrent login attempt failure')
+        ) {
+            alertDescriptions = aggregateDescription(alertInfo, desc);
+        } else {
+            alertDescriptions = [];
+            for (const info of alertInfo) {
+                desc = `Observed${summary}\nHost: ${info.alertHost}\n`;
+                if (info.host_ip) {
+                    desc += `Host_IP: ${info.host_ip}\n`;
+                }
+
+                for (const key in info) {
+                    if (Object.hasOwnProperty.call(info, key)) {
+                        const value = info[key];
+                        if (key == 'systemTime') {
+                            desc += `systemTime(<span class="red_highlight">UTC+8</span>): ${info.systemTime}\n`;
+                        } else if (value !== undefined && value !== '' && key != 'host_ip') {
+                            console.log('===', key, value);
+                            desc += `${key}: ${value}\n`;
+                        }
                     }
                 }
+                alertDescriptions.push(desc);
             }
-            alertDescriptions.push(desc);
         }
-        if (LogSourceDomain == cachedMappingContent['gga']) {
-            let kibana = $('#field-customfield_10308').text().trim().split(' ')[36];
-            let newUrl = kibana.replace(
-                /https:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/,
-                'https://' + cachedMappingContent['gga_url']
-            );
-            alertDescriptions.push(`\n${newUrl}\n`);
-        }
+
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
         showDialog(alertMsg);
     }
-
+    function showWinevent() {
+        showDialog(messages);
+    }
     addButton('generateDescription', 'Description', generateDescription);
+    if (messages != '') {
+        addButton('showWinevent', 'win_event', showWinevent);
+    }
 }
 
 function FortigateAlertHandler(...kwargs) {
@@ -4930,6 +4966,20 @@ function CheckPointEmailHandler(...kwargs) {
                     acc.push(data_json);
                     raw_alert += 1;
                 }
+                if (DecoderName == 'workday') {
+                    console.log(result);
+                    let workday = result['workday'];
+                    acc.push({
+                        timestamp: workday['Sign-on_Time'],
+                        Signon_IP_Address: workday['Signon_IP_Address'],
+                        System_Account: workday['System_Account'],
+                        log_type: workday['log_type'],
+                        Device_Type: workday['Device_Type'],
+                        Authentication_Type: workday['Authentication_Type'],
+                        Authentication_Failure_Message: workday['Authentication_Failure_Message']
+                    });
+                    console.log(acc);
+                }
             } catch (error) {
                 console.log(`Error: ${error}`);
             }
@@ -4946,22 +4996,30 @@ function CheckPointEmailHandler(...kwargs) {
         });
     }
     function generateDescription() {
-        const alertDescriptions = [];
-        for (const info of alertInfo) {
-            let desc = `Observed ${summary.split(']').at(-1)}\n`;
-            Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && value !== '' && value !== 0 && value !== '[]') {
-                    if (index == 'time' || index == 'createtime') {
-                        desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
-                    } else if (index == 'timestamp') {
-                        desc += `createtime(<span class="red_highlight">GMT+8</span>): ${value}\n`;
-                    } else {
-                        desc += `${index}: ${value}\n`;
+        let desc = `Observed ${summary.split(']').at(-1)}\n`;
+
+        let alertDescriptions;
+        if (DecoderName == 'workday') {
+            alertDescriptions = aggregateDescription(alertInfo, desc);
+        } else {
+            alertDescriptions = [];
+            for (const info of alertInfo) {
+                desc = `Observed ${summary.split(']').at(-1)}\n`;
+                Object.entries(info).forEach(([index, value]) => {
+                    if (value !== undefined && value !== '' && value !== 0 && value !== '[]') {
+                        if (index == 'time' || index == 'createtime') {
+                            desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
+                        } else if (index == 'timestamp') {
+                            desc += `createtime(<span class="red_highlight">GMT+8</span>): ${value}\n`;
+                        } else {
+                            desc += `${index}: ${value}\n`;
+                        }
                     }
-                }
-            });
-            alertDescriptions.push(desc);
+                });
+                alertDescriptions.push(desc);
+            }
         }
+
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
         showDialog(alertMsg);
     }
@@ -5447,6 +5505,7 @@ function GemsAlertHandler(...kwargs) {
             alertDescriptions = aggregateDescription(alertInfo, desc);
         } else {
             for (const info of alertInfo) {
+                desc = `Observed ${summary.split(']').at(-1)}\n`;
                 if (typeof info === 'object') {
                     Object.entries(info).forEach(([index, value]) => {
                         if (value !== undefined) {
@@ -6395,7 +6454,8 @@ function RealTimeMonitoring() {
                 'windows': NetsKopeAlertHandler,
                 'prisma-runtime-security': GoogleAlertHandler,
                 'playtechsecurityevents': GoogleAlertHandler,
-                'mcafee_security_manager': NetsKopeAlertHandler
+                'mcafee_security_manager': NetsKopeAlertHandler,
+                'workday': CheckPointEmailHandler
             };
             if (DecoderName.includes('m365-defender-json')) {
                 let decoder_name = [];
@@ -6438,7 +6498,9 @@ function RealTimeMonitoring() {
                 'abnormally large outgoing accept traffic': FortigateAlertHandler,
                 'windows multiple accounts lockout within a short period': WineventAlertHandler,
                 'splunk alert:  sentinelone': SplunkAlertHandler,
-                'infrasys': GoogleAlertHandler
+                'infrasys': GoogleAlertHandler,
+                'possible password spraying attacks': WineventAlertHandler,
+                'concurrent login attempt failure': WineventAlertHandler
             };
             let No_Decoder_handler = null;
             Object.keys(No_Decoder_handlers).forEach((key) => {
