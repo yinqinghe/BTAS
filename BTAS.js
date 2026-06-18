@@ -1267,7 +1267,7 @@ function cortexAlertHandler(...kwargs) {
     } else {
         alert('cachedWebsiteContent is empty,please connect VPN get information');
     }
-    const orgNavigator = orgDict[LogSourceDomain];
+    let orgNavigator = orgDict[LogSourceDomain];
     let cortex_url = [];
 
     /**
@@ -1510,8 +1510,14 @@ function cortexAlertHandler(...kwargs) {
 
     function openCard() {
         let url = [];
+
         for (const info of alertInfo) {
-            const { source, alert_id, case_id } = info;
+            const { source, alert_id, case_id, alert_link } = info;
+            console.log('alert_link', alert_link);
+            if (alert_link != undefined) {
+                // console.log('===', alert_link.split('/'));
+                orgNavigator = 'https://' + alert_link.split('/')[2] + '/';
+            }
             if (orgNavigator) {
                 let cardURL, case_url;
                 switch (source) {
@@ -2589,6 +2595,7 @@ function AzureGraphAlertHandler(...kwargs) {
                     acc.push({
                         activityDateTime: activityDateTime,
                         AppDisplayName: azure?.appDisplayName || azure?.initiatedBy?.app?.displayName,
+                        clientAppUsed: azure?.clientAppUsed || azure?.initiatedBy?.app?.clientAppUsed,
                         SourceUser: azure?.userPrincipalName || azure?.initiatedBy?.user?.userPrincipalName,
                         IpAddress: azure?.ipAddress || azure?.initiatedBy?.user?.ipAddress,
                         Location:
@@ -3058,12 +3065,16 @@ function Risky_Countries_AlertHandler(...kwargs) {
         for (const info of alertInfo) {
             let desc = `Observed ${title.split(':')[0]}\n`;
             for (const key in info.alertExtraInfo) {
-                const value = info.alertExtraInfo[key];
+                const value = info.alertExtraInfo?.[key];
                 if (Array.isArray(value)) {
-                    value.forEach((item, index) => {
-                        Object.keys(item).forEach((key) => {
-                            console.log(key, item[key]);
-                            desc += `${key}: ${item[key]}\n`;
+                    value.forEach((item) => {
+                        Object.entries(item).forEach(([k, v]) => {
+                            if (v !== undefined && v != '') {
+                                if (k === 'InternetMessageId' && typeof v === 'string') {
+                                    v = v.replace(/^</, '').replace(/>$/, '');
+                                }
+                                desc += `${k}: ${v}\n`;
+                            }
                         });
                         desc += `\n`;
                     });
@@ -3127,84 +3138,6 @@ function Agent_Disconnect_AlertHandler(...kwargs) {
     }
     addButton('generateDescription', 'Description', generateDescription);
     addButton('openKQL', 'KQL', openMDE);
-}
-
-function MdbAlertHandler(...kwargs) {
-    var { summary, rawLog } = kwargs[0];
-    if (rawLog.length == 0 || rawLog.length == 1) {
-        rawLog = $('#customfield_10219-val').text().trim().split('\n');
-    }
-    function parseLog(rawLog) {
-        const alertInfo = rawLog.reduce((acc, log) => {
-            try {
-                if (log.length == 0) {
-                    return acc;
-                }
-                if (summary.toLowerCase().includes('syslog: user missed the password more than one time')) {
-                    let log_ = log.split(';')[1].split(' ');
-                    let time_host = log.split(' sshd')[0].split(' ');
-                    let user = '';
-                    if (log_.length > 7) {
-                        user = log_[8].split('=')[1];
-                    }
-                    let description = `Observed user<span class='black_highlight'> ${user}</span> multiple ssh login failed from ${
-                        log_[6].split('=')[1]
-                    }\nCreateTime: ${time_host
-                        .slice(0, time_host.length - 1)
-                        .join(' ')}\nHostname: <span class='black_highlight'> ${
-                        time_host[time_host.length - 1]
-                    }</span>\n`;
-
-                    acc.push(description);
-                }
-                if (summary.toLowerCase().includes('sshd: insecure connection attempt')) {
-                    let log_ = log.split(' ');
-                    console.log('log', log_);
-                    let description = `Observed insecure connection attempt from ${
-                        log_[log_.length - 3]
-                    }\nCreateTime: ${log_.slice(0, log_.length - 11).join(' ')}\n`;
-                    acc.push(description);
-                }
-                if (
-                    summary
-                        .toLowerCase()
-                        .includes('anomaly: suspected lateral movement - linux containing session opened')
-                ) {
-                    let log_ = log.split('>')[1] + '\n';
-                    console.log('log', log_);
-                    acc.push(log_);
-                }
-            } catch (error) {
-                console.log(`Error: ${error.message}`);
-            }
-            return acc;
-        }, []);
-        return alertInfo;
-    }
-    const alertInfo = parseLog(rawLog);
-    function generateDescription() {
-        const alertDescriptions = [];
-        if (summary.toLowerCase().includes('anomaly: suspected lateral movement - linux containing session opened')) {
-            const Log_source = $('#customfield_10204-val').text().trim();
-            alertDescriptions.push(`Observed  session opened on <span class='black_highlight'>${Log_source}</span>\n`);
-        }
-        for (const info of alertInfo) {
-            alertDescriptions.push(info);
-        }
-        if (summary.toLowerCase().includes('sshd: insecure connection attempt')) {
-            alertDescriptions.push('Kindly help to verify if the connection is legitimate\n');
-        }
-        if (summary.toLowerCase().includes('syslog: user missed the password more than one time')) {
-            alertDescriptions.push('Kindly help to verify if the login is legitimate\n');
-        }
-        if (summary.toLowerCase().includes('anomaly: suspected lateral movement - linux containing session opened')) {
-            alertDescriptions.push('Kindly help to verify if the session is legitimate\n');
-        }
-        const alertMsg = [...new Set(alertDescriptions)].join('\n');
-        showDialog(alertMsg);
-    }
-
-    addButton('generateDescription', 'Description', generateDescription);
 }
 
 function AlicloudAlertHandler(...kwargs) {
@@ -3280,7 +3213,6 @@ function AlicloudAlertHandler(...kwargs) {
                             request_method: request_method ? request_method : undefined,
                             request_uri: request_uri ? request_uri : undefined
                         };
-                        let LogSource = $('#customfield_10204-val').text().trim();
                         if (detail != undefined) {
                             detail = JSON.parse(detail);
                             alertExtraInfo = Object.assign({}, alertExtraInfo, detail);
@@ -3288,7 +3220,6 @@ function AlicloudAlertHandler(...kwargs) {
                         if (requestParameters != undefined) {
                             alertExtraInfo = Object.assign({}, alertExtraInfo, requestParameters);
                         }
-                        alertExtraInfo['Logsource'] = LogSource;
                         acc.push({ alertExtraInfo });
                     } catch (error) {
                         console.log('Unable to parse JSON data, handling exception: ' + error);
@@ -4534,17 +4465,21 @@ function WebAccesslogAlertHandler(...kwargs) {
                     while ((match_ = regex_.exec(log)) !== null) {
                         matches_.push(match_[0]);
                     }
-                    console.log(matches);
-                    console.log(matches_);
                     let logArray = log.split(' ').filter((item) => item !== ''); //Remove extra whitespace from the string
-                    console.log(logArray);
                     if (logArray[8].includes(':')) {
                         if (log.includes('nginx-access')) {
                             const regex =
                                 /^(?<syslog_time>\w{3}\s+\d+\s[\d:]+)\s(?<hostname>\S+)\s(?<app>\S+)\s(?<ip>\d{1,3}(?:\.\d{1,3}){3})\s-\s-\s\[(?<time>[^\]]+)\]\s"(?<method>\S+)\s(?<path>\S+)\s(?<proto>[^"]+)"\s(?<status>\d{3})\s(?<bytes>\d+)\s"(?<referer>[^"]*)"\s"(?<ua>[^"]*)"/;
                             const match = log.match(regex);
                             if (match) {
-                                console.log(match.groups);
+                                acc.push(match.groups);
+                            }
+                        } else if (log.includes('Apache-accesas')) {
+                            const cleanedLog = log.replace(/A{10,}/g, 'AAAAAAAAAAAAAAAA...');
+                            const regex =
+                                /^(?<syslog_time>\w+\s+\d+\s+\d+:\d+:\d+)\s+(?<hostname>\S+)\s+(?<app_name>\S+)\s+(?<client_ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*?\[(?<http_time>.*?)\]\s+"(?<method>\w+)\s+(?<url>\S+)\s+(?<protocol>HTTP\/\d\.\d)"\s+(?<status>\d+)\s+(?<size>\S+)\s+"(?<referer>.*?)"\s+"(?<user_agent>.*?)"$/;
+                            const match = cleanedLog.match(regex);
+                            if (match) {
                                 acc.push(match.groups);
                             }
                         } else {
@@ -4894,6 +4829,16 @@ function CheckPointEmailHandler(...kwargs) {
                 if (log.length == 0) {
                     return acc;
                 }
+                if (DecoderName == 'checkpoint-infinity-portal-saas') {
+                    const regex =
+                        /verdict:\s*(?<verdict>[^;]+);\s*product:\s*(?<product>[^;]+);\s*action:\s*(?<action>[^;]+);\s*from_email:\s*(?<email>[^;]+);[\s\S]*?performed geo-suspicious events:\s*(?<msg>.*)$/;
+                    const match = log.match(regex);
+                    if (match) {
+                        console.log(match.groups);
+                        acc.push(match.groups);
+                    }
+                    return acc;
+                }
                 const jsonString = log.match(/{.*}/)[0];
                 let result = JSON.parse(jsonString);
                 console.log('===result', result);
@@ -4933,6 +4878,7 @@ function CheckPointEmailHandler(...kwargs) {
                     });
                     acc.push(result);
                 }
+
                 if (DecoderName == 'threatbook-tdp') {
                     acc.push({
                         timestamp: result['timeStr'],
@@ -6385,12 +6331,14 @@ function RealTimeMonitoring() {
         }
     }, 4500);
     var LogSourceDomain = $('#customfield_10223-val').text().trim();
-    let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
-    if (DecoderName == '') {
-        DecoderName = $('#customfield_10906-val').text().trim().toLowerCase();
-    }
+
     // Issue page: Alert Handler
     function Alert_Handler() {
+        const summary = $('#summary-val').text().trim();
+        let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
+        if (DecoderName == '') {
+            DecoderName = $('#customfield_10906-val').text().trim().toLowerCase();
+        }
         let rawLog = $('#field-customfield_10219 > div:first-child > div:nth-child(2)').text().trim().split('\n');
         if (rawLog == '') {
             rawLog = $('#field-customfield_10904 > div:first-child > div:nth-child(2)').text().trim().split('\n');
@@ -6455,7 +6403,8 @@ function RealTimeMonitoring() {
                 'prisma-runtime-security': GoogleAlertHandler,
                 'playtechsecurityevents': GoogleAlertHandler,
                 'mcafee_security_manager': NetsKopeAlertHandler,
-                'workday': CheckPointEmailHandler
+                'workday': CheckPointEmailHandler,
+                'checkpoint-infinity-portal-saas': CheckPointEmailHandler
             };
             if (DecoderName.includes('m365-defender-json')) {
                 let decoder_name = [];
@@ -6531,7 +6480,6 @@ function RealTimeMonitoring() {
                 LogSourceDomain = $('#customfield_10846-val').text().trim();
             }
             const Log_Domain_handlers = {
-                mdb: MdbAlertHandler, //这里面有点工单为decoder name:sshd
                 dst: DstAlertHandler
             };
             const Log_Domain_handler = Log_Domain_handlers[LogSourceDomain];
@@ -6632,7 +6580,10 @@ function RealTimeMonitoring() {
         }
     }, 2000);
     addCss();
-
+    let DecoderName = $('#customfield_10807-val').text().trim().toLowerCase();
+    if (DecoderName == '') {
+        DecoderName = $('#customfield_10906-val').text().trim().toLowerCase();
+    }
     // Issue page: Norm Alert
     setTimeout(() => {
         const cachedMappingContent = GM_getValue('cachedMappingContent', null);
