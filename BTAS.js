@@ -1403,7 +1403,11 @@ function cortexAlertHandler(...kwargs) {
 
                     // 如果所有来源均为空，best 为 undefined，做好兜底
                     const file_signature_status = best?.file_signature_status;
-                    const filepath = best?.filepath;
+                    let filepath = best?.filepath;
+                    if (filepath.includes('\\_')) {
+                        filepath = filepath.replace(/\\_/g, '&amp;#92;&amp;#95;');
+                    }
+
                     const cmd = best?.cmd;
                     const sha256 = best?.sha256 && !WhiteFilehash(best.sha256) ? best.sha256 : undefined;
 
@@ -2116,6 +2120,21 @@ function AwsAlertHandler(...kwargs) {
                     return acc;
                 }
                 const { aws } = JSON.parse(log);
+                if (DecoderName == 'aws-f5-waf') {
+                    acc.push({
+                        EventTime: aws?.time.split('.')[0],
+                        method: aws?.method,
+                        req_path: aws?.req_path,
+                        src_ip: aws?.src_ip,
+                        src_port: aws?.src_port,
+                        dst_ip: aws?.dst_ip,
+                        dst_port: aws?.dst_port,
+                        rsp_code: aws?.rsp_code,
+                        response_flags: aws?.response_flags,
+                        user_agent: aws?.user_agent
+                    });
+                    return acc;
+                }
                 if (DecoderName == 'aws-guardduty') {
                     let EventTime = aws.service.eventFirstSeen.split('.')[0] + 'Z';
                     const action = aws.service.action;
@@ -2231,7 +2250,11 @@ function AwsAlertHandler(...kwargs) {
                         'country': aws?.httpRequest.country,
                         'uri': aws?.httpRequest.uri,
                         'host': aws?.httpRequest.host,
-                        'User-Agent': aws?.httpRequest.headers.find((h) => h.name.toLowerCase() === 'user-agent')?.value
+                        'User-Agent': Array.isArray(aws?.httpRequest?.headers)
+                            ? aws.httpRequest.headers.find((h) => h.name.toLowerCase() === 'user-agent')?.value
+                            : Object.entries(aws?.httpRequest?.headers || {}).find(
+                                  ([k]) => k.toLowerCase() === 'user-agent'
+                              )?.[1]
                     });
                 } else {
                     let accessKeyId = aws?.userIdentity?.accessKeyId;
@@ -2294,7 +2317,13 @@ function AwsAlertHandler(...kwargs) {
                     //         }
                     //     }
                     // });
-                } else if (value !== undefined && value !== ' ' && index != 'Summary' && index != 'title') {
+                } else if (
+                    value !== undefined &&
+                    value !== ' ' &&
+                    index != 'Summary' &&
+                    index != 'title' &&
+                    value !== ''
+                ) {
                     if (index == 'EventTime') {
                         desc += `EventTime(<span class="red_highlight">GMT</span>): ${value}\n`;
                     } else {
@@ -2668,137 +2697,6 @@ function AzureGraphAlertHandler(...kwargs) {
                 }
                 alertDescriptions.push(desc);
             }
-        }
-        const alertMsg = [...new Set(alertDescriptions)].join('\n');
-        showDialog(alertMsg);
-    }
-
-    addButton('generateDescription', 'Description', generateDescription);
-}
-
-function ProofpointAlertHandler(...kwargs) {
-    const { summary, rawLog } = kwargs[0];
-    var raw_alert = 0;
-    function parseLog(rawLog) {
-        const alertInfo = rawLog.reduce((acc, log) => {
-            try {
-                const BraceIndex = log.toString().indexOf('{');
-                const lastBraceIndex = log.toString().lastIndexOf('}');
-                // If the braces are found
-                if (BraceIndex !== -1) {
-                    raw_alert += 1;
-                    console.log(`${raw_alert} iteration 'is being processed`);
-                    // Intercepts a substring from the beginning of the brace to the end of the string
-                    json_text = log.toString().substr(BraceIndex, lastBraceIndex);
-                    try {
-                        let json_alert = JSON.parse(json_text);
-                        if (json_alert.hasOwnProperty('messagesDelivered')) {
-                            for (const message of json_alert['messagesDelivered']) {
-                                const { subject, sender, senderIP, recipient } = message;
-                                const alertExtraInfo = {
-                                    subject: subject ? subject : undefined,
-                                    sender: sender ? sender : undefined,
-                                    recipient: recipient ? recipient : undefined,
-                                    senderIP: senderIP ? senderIP : undefined
-                                };
-                                acc.push({ alertExtraInfo });
-                            }
-                        } else if (json_alert['sourcetype'].includes('clicksPermitted')) {
-                            json_alert['clickTime'] = json_alert['clickTime'].split('.')[0];
-                            json_alert['threatTime'] = json_alert['threatTime'].split('.')[0];
-                            acc.push({ alertExtraInfo: json_alert });
-                            console.log('hellO');
-                        } else {
-                            const {
-                                subject,
-                                sender,
-                                senderIP,
-                                recipient,
-                                headerFrom,
-                                messageTime,
-                                threatsInfoMap,
-                                sourcetype,
-                                spamScore,
-                                phishScore,
-                                cluster,
-                                completelyRewritten,
-                                id,
-                                QID,
-                                GUID
-                            } = json_alert;
-                            let alertExtraInfo = {
-                                sourcetype: sourcetype ? sourcetype : undefined,
-                                messageTime: messageTime ? messageTime : undefined,
-                                subject: subject ? subject : undefined,
-                                senderIP: senderIP ? senderIP : undefined,
-                                sender: sender ? sender : undefined,
-                                recipient: recipient ? recipient : undefined,
-                                headerFrom: headerFrom ? headerFrom : undefined,
-                                spamScore: spamScore ? spamScore : undefined,
-                                phishScore: phishScore ? phishScore : undefined,
-                                cluster: cluster ? cluster : undefined,
-                                completelyRewritten: completelyRewritten ? completelyRewritten : undefined,
-                                id: id ? id : undefined,
-                                QID: QID ? QID : undefined,
-                                GUID: GUID ? GUID : undefined
-                            };
-                            alertExtraInfo = Object.assign({}, alertExtraInfo, threatsInfoMap[0]);
-                            acc.push({ alertExtraInfo });
-                        }
-                    } catch (error) {
-                        console.log('Unable to parse JSON data, handling exception: ' + error);
-                        var split_str = json_text
-                            .split('"messagesDelivered" :')[1]
-                            .split('"messagesBlocked" :')[0]
-                            .slice(1, -2);
-                        const json_alerts = JSON.parse(split_str);
-                        for (const alert of json_alerts) {
-                            const { subject, sender, senderIP, recipient } = alert;
-                            console.log(subject, recipient);
-                            const alertExtraInfo = {
-                                subject: subject ? subject : undefined,
-                                sender: sender ? sender : undefined,
-                                recipient: recipient ? recipient : undefined,
-                                senderIP: senderIP ? senderIP : undefined
-                            };
-                            acc.push({ alertExtraInfo });
-                        }
-                    }
-                }
-            } catch (error) {
-                console.log(`Error: ${error.message}`);
-            }
-            return acc;
-        }, []);
-        return alertInfo;
-    }
-
-    const alertInfo = parseLog(rawLog);
-    const num_alert = $('#customfield_10300-val').text().trim();
-    console.log('reduce the methods iterated altogether' + num_alert + ' times');
-    if (raw_alert < num_alert) {
-        AJS.banner({
-            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-        });
-    }
-    function generateDescription() {
-        const alertDescriptions = [];
-
-        for (const info of alertInfo) {
-            let desc = `Observed ${summary.split(']')[1]}\n`;
-            for (const key in info.alertExtraInfo) {
-                if (Object.hasOwnProperty.call(info.alertExtraInfo, key)) {
-                    const value = info.alertExtraInfo[key];
-                    if (value !== undefined) {
-                        if (key == 'messageTime' || key == 'clickTime' || key == 'threatTime') {
-                            desc += `${key}(<span class="red_highlight">GMT</span>): ${value.split('.')[0]}\n`;
-                        } else {
-                            desc += `${key}: ${value}\n`;
-                        }
-                    }
-                }
-            }
-            alertDescriptions.push(desc);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
         showDialog(alertMsg);
@@ -4747,74 +4645,6 @@ function SentinelOneAlertHandler(...kwargs) {
     addButton('generateDescription', 'Description', generateDescription);
 }
 
-function F5AsmAlertHandler(...kwargs) {
-    const { rawLog, summary } = kwargs[0];
-    var raw_alert = 0;
-    function parseLog(rawLog) {
-        const alertInfo = rawLog.reduce((acc, log) => {
-            try {
-                if (log.length == 0) {
-                    return acc;
-                }
-                const regex = /(\w+)="([^"]*)"/g;
-                const result = {};
-
-                let match;
-                while ((match = regex.exec(log)) !== null) {
-                    result[match[1]] = match[2];
-                }
-                acc.push({
-                    createtime: result.date_time,
-                    unit_hostname: result.unit_hostname,
-                    management_ip_address: result.management_ip_address,
-                    http_class_name: result.http_class_name,
-                    response_code: result.response_code,
-                    request_status: result.request_status,
-                    ip_client: result.ip_client,
-                    uri: result.uri,
-                    method: result.method,
-                    protocol: result.protocol,
-                    violations: result.violations,
-                    attack_type: result.attack_type
-                });
-                raw_alert += 1;
-            } catch (error) {
-                console.log(`Error: ${error}`);
-            }
-            return acc;
-        }, []);
-        return alertInfo;
-    }
-
-    const alertInfo = parseLog(rawLog);
-    const num_alert = $('#customfield_10300-val').text().trim();
-    if (raw_alert < num_alert) {
-        AJS.banner({
-            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-        });
-    }
-    function generateDescription() {
-        const alertDescriptions = [];
-
-        for (const info of alertInfo) {
-            let desc = `Observed ${summary.split(']').at(-1)}\n`;
-            Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && value !== ' ' && index != 'Summary') {
-                    if (index == 'createtime') {
-                        desc += `createtime(<span class="red_highlight">GMT+8</span>): ${value}\n`;
-                    } else {
-                        desc += `${index}: ${value}\n`;
-                    }
-                }
-            });
-            alertDescriptions.push(desc);
-        }
-        const alertMsg = [...new Set(alertDescriptions)].join('\n');
-        showDialog(alertMsg);
-    }
-    addButton('generateDescription', 'Description', generateDescription);
-}
-
 function CheckPointEmailHandler(...kwargs) {
     const { rawLog, summary, DecoderName } = kwargs[0];
     var raw_alert = 0;
@@ -4829,9 +4659,15 @@ function CheckPointEmailHandler(...kwargs) {
                 if (log.length == 0) {
                     return acc;
                 }
-                if (DecoderName == 'checkpoint-infinity-portal-saas') {
+                let result = '';
+                const jsonString = log.match(/{.*}/);
+                if (jsonString) {
+                    result = JSON.parse(jsonString);
+                }
+                console.log('===result', result);
+                if (DecoderName == 'checkpoint-infinity-portal-saas' && !jsonString) {
                     const regex =
-                        /verdict:\s*(?<verdict>[^;]+);\s*product:\s*(?<product>[^;]+);\s*action:\s*(?<action>[^;]+);\s*from_email:\s*(?<email>[^;]+);[\s\S]*?performed geo-suspicious events:\s*(?<msg>.*)$/;
+                        /verdict:\s*(?<verdict>[^;]+);\s*product:\s*(?<product>[^;]+);\s*action:\s*(?<action>[^;]+);\s*from_email:\s*(?<email>[^;]+);[\s\S]*?appi_name:\s*(?<appi_name>[^;]+);[\s\S]*?\]\s*(?<msg>.*)$/;
                     const match = log.match(regex);
                     if (match) {
                         console.log(match.groups);
@@ -4839,9 +4675,7 @@ function CheckPointEmailHandler(...kwargs) {
                     }
                     return acc;
                 }
-                const jsonString = log.match(/{.*}/)[0];
-                let result = JSON.parse(jsonString);
-                console.log('===result', result);
+
                 let logArray = log.split(' ').filter((item) => item !== '');
                 if (DecoderName == 'sangfor-ccom-json') {
                     let logArray = log
@@ -4868,7 +4702,10 @@ function CheckPointEmailHandler(...kwargs) {
                     acc.push(data_json);
                     raw_alert += 1;
                 }
-                if (DecoderName == 'checkpoint-harmony-email-saas') {
+                if (
+                    DecoderName == 'checkpoint-harmony-email-saas' ||
+                    DecoderName == 'checkpoint-infinity-portal-saas'
+                ) {
                     fieldNames = ['app_id', 'id', 'confidence_level_int', 'tenant_id', 'rule_id'];
                     result['time'] = result['time'].split('.')[0];
                     fieldNames.forEach((field) => {
@@ -4952,7 +4789,7 @@ function CheckPointEmailHandler(...kwargs) {
             for (const info of alertInfo) {
                 desc = `Observed ${summary.split(']').at(-1)}\n`;
                 Object.entries(info).forEach(([index, value]) => {
-                    if (value !== undefined && value !== '' && value !== 0 && value !== '[]') {
+                    if (value && value !== 0 && (!Array.isArray(value) || value.length > 0)) {
                         if (index == 'time' || index == 'createtime') {
                             desc += `createtime(<span class="red_highlight">GMT</span>): ${value}\n`;
                         } else if (index == 'timestamp') {
@@ -5089,96 +4926,6 @@ function NetsKopeAlertHandler(...kwargs) {
         const prefix = `Observed ${summary}\n`;
         let alertDescriptions = aggregateDescription(alertInfo, prefix);
         const alertMsg = alertDescriptions.join('\n');
-        showDialog(alertMsg);
-    }
-    addButton('generateDescription', 'Description', generateDescription);
-}
-
-function OracleAlertHandler(...kwargs) {
-    const { rawLog, summary } = kwargs[0];
-    var raw_alert = 0;
-    function parseLog(rawLog) {
-        const alertInfo = rawLog.reduce((acc, log) => {
-            try {
-                if (log.length == 0) {
-                    return acc;
-                }
-                let cloudguard = JSON.parse(log)['oci-cloudguard'];
-                let cloud = JSON.parse(log)['oracle-cloud'];
-                if (cloud) {
-                    let aEM = JSON.parse(
-                        cloud['data']['logContent']['data']['additionalDetails']['auditEventMapValue']
-                    );
-                    console.log('===', aEM);
-                    let result = {
-                        timestamp: aEM.timestamp ? aEM.timestamp.split('.')[0] : undefined,
-                        hostName: aEM.hostName ? aEM.hostName : undefined,
-                        hostIp: aEM.hostIp ? aEM.hostIp : undefined,
-                        actorName: aEM.actorName ? aEM.actorName : undefined,
-                        eventId: aEM.eventId ? aEM.eventId : undefined,
-                        clientIp: aEM.clientIp ? aEM.clientIp : undefined,
-                        httpRequestType: aEM.httpRequestType ? aEM.httpRequestType : undefined,
-                        httpResponseStatus: aEM.httpResponseStatus ? aEM.httpResponseStatus : undefined,
-                        userAgent: aEM.userAgent ? aEM.userAgent : undefined
-                    };
-                    if (aEM.adminResourceName) {
-                        result[aEM.adminResourceType] = aEM.adminResourceName;
-                    }
-                    if (aEM.adminRefResourceName) {
-                        result[aEM.adminRefResourceType] = aEM.adminRefResourceName;
-                    }
-                    acc.push(result);
-                }
-                if (cloudguard) {
-                    console.log('===', log, cloudguard);
-                    let result = {
-                        compartment_id: cloudguard.compartment_id ? cloudguard.compartment_id : undefined,
-                        detector_rule_id: cloudguard.detector_rule_id ? cloudguard.detector_rule_id : undefined,
-                        id: cloudguard.id ? cloudguard.id : undefined,
-                        regions: cloudguard.regions ? cloudguard.regions : undefined,
-                        resource_id: cloudguard.resource_id ? cloudguard.resource_id : undefined,
-                        risk_level: cloudguard.risk_level ? cloudguard.risk_level : undefined,
-                        target_id: cloudguard.target_id ? cloudguard.target_id : undefined,
-                        timestamp: cloudguard.time_first_detected
-                            ? cloudguard.time_first_detected.split('.')[0]
-                            : undefined
-                    };
-                    result[cloudguard['resource_type']] = cloudguard['resource_name'];
-                    acc.push(result);
-                }
-                raw_alert += 1;
-            } catch (error) {
-                console.log(`Error: ${error}`);
-            }
-            return acc;
-        }, []);
-        return alertInfo;
-    }
-
-    const alertInfo = parseLog(rawLog);
-    console.log('===', alertInfo);
-    const num_alert = $('#customfield_10300-val').text().trim();
-    if (raw_alert < num_alert) {
-        AJS.banner({
-            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
-        });
-    }
-    function generateDescription() {
-        const alertDescriptions = [];
-        for (const info of alertInfo) {
-            let desc = `Observed ${summary.split(']').at(-1)}\n`;
-            Object.entries(info).forEach(([index, value]) => {
-                if (value !== undefined && value !== ' ' && index != 'Summary') {
-                    if (index == 'timestamp') {
-                        desc += `timestamp(<span class="red_highlight">GMT</span>): ${value}\n`;
-                    } else {
-                        desc += `${index}: ${value}\n`;
-                    }
-                }
-            });
-            alertDescriptions.push(desc);
-        }
-        const alertMsg = [...new Set(alertDescriptions)].join('\n');
         showDialog(alertMsg);
     }
     addButton('generateDescription', 'Description', generateDescription);
@@ -6363,8 +6110,7 @@ function RealTimeMonitoring() {
                 'azuregraphapi-json': AzureGraphAlertHandler,
                 'paloalto-firewall': paloaltoAlertHandler,
                 'impervainc_cef': SangforAlertHandler,
-                // 'proofpoint_tap': ProofpointAlertHandler,
-                'zscaler-zpa-json': ZscalerAlertHandler,
+                // 'zscaler-zpa-json': ZscalerAlertHandler,
                 'pulse-secure': PulseAlertHandler,
                 'aws-guardduty': AwsAlertHandler,
                 'alicloud-json': AlicloudAlertHandler,
@@ -6380,7 +6126,6 @@ function RealTimeMonitoring() {
                 'sentinelone-json': SentinelOneAlertHandler,
                 'sonicwall': FortigateAlertHandler,
                 'trellix_cef': SangforAlertHandler,
-                // 'f5-asm': F5AsmAlertHandler,
                 'sangfor': SangforAlertHandler,
                 'checkpoint-harmony-email-saas': CheckPointEmailHandler,
                 'nnt_cef': SangforAlertHandler,
@@ -6388,7 +6133,6 @@ function RealTimeMonitoring() {
                 'trendmicro_cef': SangforAlertHandler,
                 'forcepoint_cef': SangforAlertHandler,
                 'web-accesslog-iis-default': WebAccesslogAlertHandler,
-                // 'oracle-json': OracleAlertHandler,
                 'google-api-json': GoogleAlertHandler,
                 'watchtowr-json': GoogleAlertHandler,
                 'threatbook-tdp': CheckPointEmailHandler,
@@ -6404,7 +6148,9 @@ function RealTimeMonitoring() {
                 'playtechsecurityevents': GoogleAlertHandler,
                 'mcafee_security_manager': NetsKopeAlertHandler,
                 'workday': CheckPointEmailHandler,
-                'checkpoint-infinity-portal-saas': CheckPointEmailHandler
+                'checkpoint-infinity-portal-saas': CheckPointEmailHandler,
+                'aws-f5-waf': AwsAlertHandler,
+                'aws-waf': AwsAlertHandler
             };
             if (DecoderName.includes('m365-defender-json')) {
                 let decoder_name = [];
@@ -6417,6 +6163,9 @@ function RealTimeMonitoring() {
                     DecoderName = 'm365-defender-json';
                 }
             }
+            if (DecoderName.includes('checkpoint-infinity-portal-saas')) {
+                DecoderName = 'checkpoint-infinity-portal-saas';
+            }
             const handler = handlers[DecoderName];
             if (handler) {
                 handler({
@@ -6427,12 +6176,10 @@ function RealTimeMonitoring() {
                 });
             }
             const No_Decoder_handlers = {
-                // 'detect aad, o365 sign-in from risky countries': Risky_Countries_AlertHandler,
                 'o365 login from malware-ip': Risky_Countries_AlertHandler,
-                // 'rarely country signin from o365': Risky_Countries_AlertHandler,
                 'agent disconnected': Agent_Disconnect_AlertHandler,
                 'suspicious geolocation ip login success': PulseAlertHandler,
-                'login success from malware ip(s)': ThreatMatrixAlertHandler,
+                // 'login success from malware ip(s)': ThreatMatrixAlertHandler,
                 'multiple account being disabled or deleted in short period of time': MultipleAccountAlertHandler,
                 'multiple sms request for same source ip': AwsAlertHandler,
                 'azure same user login failed multiple times': Risky_Countries_AlertHandler,
