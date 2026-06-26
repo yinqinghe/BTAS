@@ -2254,6 +2254,11 @@ function AwsAlertHandler(...kwargs) {
                             ? aws.httpRequest.headers.find((h) => h.name.toLowerCase() === 'user-agent')?.value
                             : Object.entries(aws?.httpRequest?.headers || {}).find(
                                   ([k]) => k.toLowerCase() === 'user-agent'
+                              )?.[1],
+                        'Referer': Array.isArray(aws?.httpRequest?.headers)
+                            ? aws.httpRequest.headers.find((h) => h.name.toLowerCase() === 'referer')?.value
+                            : Object.entries(aws?.httpRequest?.headers || {}).find(
+                                  ([k]) => k.toLowerCase() === 'referer'
                               )?.[1]
                     });
                 } else {
@@ -2322,7 +2327,8 @@ function AwsAlertHandler(...kwargs) {
                     value !== ' ' &&
                     index != 'Summary' &&
                     index != 'title' &&
-                    value !== ''
+                    value !== '' &&
+                    value !== 'REDACTED'
                 ) {
                     if (index == 'EventTime') {
                         desc += `EventTime(<span class="red_highlight">GMT</span>): ${value}\n`;
