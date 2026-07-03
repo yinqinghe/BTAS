@@ -1404,7 +1404,7 @@ function cortexAlertHandler(...kwargs) {
                     // 如果所有来源均为空，best 为 undefined，做好兜底
                     const file_signature_status = best?.file_signature_status;
                     let filepath = best?.filepath;
-                    if (filepath.includes('\\_')) {
+                    if (filepath && filepath.includes('\\_')) {
                         filepath = filepath.replace(/\\_/g, '&amp;#92;&amp;#95;');
                     }
 
@@ -3124,6 +3124,8 @@ function AlicloudAlertHandler(...kwargs) {
                         if (requestParameters != undefined) {
                             alertExtraInfo = Object.assign({}, alertExtraInfo, requestParameters);
                         }
+                        let LogSource = $('#customfield_10204-val').text().trim();
+                        alertExtraInfo['Logsource'] = LogSource;
                         acc.push({ alertExtraInfo });
                     } catch (error) {
                         console.log('Unable to parse JSON data, handling exception: ' + error);
@@ -4948,6 +4950,7 @@ function GoogleAlertHandler(...kwargs) {
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#x27;');
     }
+    let messages = '';
     function parseLog(rawLog) {
         const alertInfo = rawLog.reduce((acc, log) => {
             try {
@@ -4955,7 +4958,29 @@ function GoogleAlertHandler(...kwargs) {
                     return acc;
                 }
                 let result = {};
-
+                if (DecoderName == 'playtechevents') {
+                    let Event = JSON.parse(log)['PlayTech']['Event'];
+                    let RenderedDescription = Event.RenderedDescription;
+                    const content = (RenderedDescription || '').replace(/^"|"$/g, '');
+                    const lines = content.split(/\t/);
+                    const message = lines[0] || '';
+                    if (message != '') {
+                        messages += (RenderedDescription || '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/ \t/g, '\r\n\t')
+                            .replace(/  /g, '\r\n');
+                        messages +=
+                            '\n--------------------------------------------------------------------------------------\n';
+                    }
+                    result = {
+                        createtime: Event.TimeGenerated.split('.')[0] + 'Z',
+                        hostname: Event.Computer,
+                        EventID: Event.EventID,
+                        EventLevelName: Event.EventLevelName,
+                        message: message.split('.')[0]
+                    };
+                    acc.push(result);
+                }
                 if (DecoderName == 'google-api-json') {
                     let log_ = JSON.parse(log);
                     let result;
@@ -5130,7 +5155,14 @@ function GoogleAlertHandler(...kwargs) {
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
         showDialog(alertMsg);
     }
+
+    function showWinevent() {
+        showDialog(messages);
+    }
     addButton('generateDescription', 'Description', generateDescription);
+    if (messages != '' && DecoderName == 'playtechevents') {
+        addButton('showWinevent', 'win_event', showWinevent);
+    }
 }
 
 function GemsAlertHandler(...kwargs) {
@@ -6110,7 +6142,6 @@ function RealTimeMonitoring() {
                 'sepm-security': SpemAlertHandler,
                 'sepm-traffic': SpemAlertHandler,
                 'aws-cloudtrail': AwsAlertHandler,
-                'aws-cisco-umbrella': AwsAlertHandler,
                 'm365-defender-json': MDE365AlertHandler,
                 'azureeventhub': AzureAlertHandler,
                 'azuregraphapi-json': AzureGraphAlertHandler,
@@ -6132,16 +6163,16 @@ function RealTimeMonitoring() {
                 'sentinelone-json': SentinelOneAlertHandler,
                 'sonicwall': FortigateAlertHandler,
                 'trellix_cef': SangforAlertHandler,
-                'sangfor': SangforAlertHandler,
+                // 'sangfor': SangforAlertHandler,
                 'checkpoint-harmony-email-saas': CheckPointEmailHandler,
                 'nnt_cef': SangforAlertHandler,
                 'netskope': NetsKopeAlertHandler,
                 'trendmicro_cef': SangforAlertHandler,
                 'forcepoint_cef': SangforAlertHandler,
-                'web-accesslog-iis-default': WebAccesslogAlertHandler,
+                // 'web-accesslog-iis-default': WebAccesslogAlertHandler,
                 'google-api-json': GoogleAlertHandler,
                 'watchtowr-json': GoogleAlertHandler,
-                'threatbook-tdp': CheckPointEmailHandler,
+                // 'threatbook-tdp': CheckPointEmailHandler,
                 'kes': GemsAlertHandler,
                 'zscaler-json': ZscalerAlertHandler,
                 'cloudflare-json': GoogleAlertHandler,
@@ -6156,7 +6187,8 @@ function RealTimeMonitoring() {
                 'workday': CheckPointEmailHandler,
                 'checkpoint-infinity-portal-saas': CheckPointEmailHandler,
                 'aws-f5-waf': AwsAlertHandler,
-                'aws-waf': AwsAlertHandler
+                'aws-waf': AwsAlertHandler,
+                'playtechevents': GoogleAlertHandler
             };
             if (DecoderName.includes('m365-defender-json')) {
                 let decoder_name = [];
