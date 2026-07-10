@@ -2889,13 +2889,18 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             Workload: data['wl'] ? data['wl'] : undefined,
                             Reason: data['ad'] ? data['ad'] : undefined
                         };
-                    } else if (!json_alert['office_365'].hasOwnProperty('ClientIP')) {
+                    } else if (
+                        !json_alert['office_365'].hasOwnProperty('ClientIP') &&
+                        !json_alert['office_365'].hasOwnProperty('ClientIPAddress')
+                    ) {
                         let data = json_alert['office_365'];
                         alertExtraInfo = {
                             CreationEventTime: data['CreationTime'] ? data['CreationTime'] : undefined,
                             Operation: data['Operation'] ? data['Operation'] : undefined,
                             ResultStatus: data['ResultStatus'] ? data['ResultStatus'] : undefined,
                             UserId: data['UserId'] ? data['UserId'] : undefined,
+                            Organization: data['OrganizationName'] ? data['OrganizationName'] : undefined,
+                            LogonUserSid: data['LogonUserSid'] ? data['LogonUserSid'] : undefined,
                             ObjectId: data['ObjectId'] ? data['ObjectId'] : undefined,
                             UserKey: data['UserKey'] ? data['UserKey'] : undefined
                         };
@@ -2909,9 +2914,13 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             ResultStatusDetail,
                             UserAgent,
                             ActorIpAddress,
+                            ClientIPAddress,
+                            Organization,
+                            LogonUserSid,
                             DeviceProperties,
                             ResultStatus,
                             AffectedItems,
+                            Folders,
                             ForwardingSmtpAddress,
                             AppPoolName
                         } = json_alert['office_365'];
@@ -2931,6 +2940,13 @@ function Risky_Countries_AlertHandler(...kwargs) {
                                 Path: item.ParentFolder.Path
                             }));
                         }
+                        let FolderItems = Folders?.[0]?.['FolderItems'];
+                        if (FolderItems) {
+                            items = FolderItems.map((item) => ({
+                                subject: item.Subject,
+                                InternetMessageId: item.InternetMessageId
+                            }));
+                        }
                         const unique = items.filter(
                             (item, index, self) =>
                                 index === self.findIndex((t) => JSON.stringify(t) === JSON.stringify(item))
@@ -2942,6 +2958,9 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             AppPoolName: AppPoolName ? AppPoolName : undefined,
                             UserId: UserId ? UserId : undefined,
                             ClientIP: ClientIP ? ClientIP : undefined,
+                            ClientIPAddress: ClientIPAddress ? ClientIPAddress : undefined,
+                            Organization: Organization ? Organization : undefined,
+                            LogonUserSid: LogonUserSid ? LogonUserSid : undefined,
                             ActorIpAddress: ActorIpAddress ? ActorIpAddress : undefined,
                             UserAgent: UserAgent ? UserAgent : undefined,
                             DeviceName: devicename ? devicename : 'N/A',
@@ -6169,10 +6188,8 @@ function RealTimeMonitoring() {
                 'netskope': NetsKopeAlertHandler,
                 'trendmicro_cef': SangforAlertHandler,
                 'forcepoint_cef': SangforAlertHandler,
-                // 'web-accesslog-iis-default': WebAccesslogAlertHandler,
                 'google-api-json': GoogleAlertHandler,
                 'watchtowr-json': GoogleAlertHandler,
-                // 'threatbook-tdp': CheckPointEmailHandler,
                 'kes': GemsAlertHandler,
                 'zscaler-json': ZscalerAlertHandler,
                 'cloudflare-json': GoogleAlertHandler,
@@ -6217,7 +6234,6 @@ function RealTimeMonitoring() {
                 'o365 login from malware-ip': Risky_Countries_AlertHandler,
                 'agent disconnected': Agent_Disconnect_AlertHandler,
                 'suspicious geolocation ip login success': PulseAlertHandler,
-                // 'login success from malware ip(s)': ThreatMatrixAlertHandler,
                 'multiple account being disabled or deleted in short period of time': MultipleAccountAlertHandler,
                 'multiple sms request for same source ip': AwsAlertHandler,
                 'azure same user login failed multiple times': Risky_Countries_AlertHandler,
