@@ -1475,9 +1475,14 @@ function cortexAlertHandler(...kwargs) {
 
             const cachedMappingContent = GM_getValue('cachedMappingContent', null);
             if (source === 'PAN NGFW') {
-                const desc = `Observed ${name}\ntimestamp: ${dateTimeStr}\nSrcip: ${action_local_ip}   Srcport: ${action_local_port}\nDstip: ${action_remote_ip}   Dstport: ${action_remote_port}\nAction: ${action}-${action_pretty}\n${
+                let desc = `Observed ${name}\ntimestamp: ${dateTimeStr}\nSrcip: ${action_local_ip}   Srcport: ${action_local_port}\nDstip: ${action_remote_ip}   Dstport: ${action_remote_port}\nAction: ${action}-${action_pretty}\n${
                     LogSourceDomain === cachedMappingContent['cca'] ? 'Cortex Portal: ' + alert_link + '\n' : ''
-                }\n`;
+                }`;
+                if (!description.includes('dataset = xdr_data')) {
+                    desc += `description: ${description}\n`;
+                } else {
+                    desc += `\n`;
+                }
                 alertDescriptions.push(desc);
             } else {
                 let desc = `Observed ${
@@ -1499,7 +1504,6 @@ function cortexAlertHandler(...kwargs) {
                         }
                     }
                 }
-                // desc += `description: ${description}\n`;
                 if (info['action_file_macro_sha256'] || info['sha256']) {
                     desc += `<a href="https://www.virustotal.com/gui/file/${
                         info['action_file_macro_sha256'] || info['sha256']
