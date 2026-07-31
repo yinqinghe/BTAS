@@ -1284,8 +1284,22 @@ function cortexAlertHandler(...kwargs) {
                     if (log.length == 0) {
                         return acc;
                     }
-                    cortex_xdr = JSON.parse(log)['cortex_xdr'];
-                    const { case_id, alert_id } = JSON.parse(log)['cortex_xdr'];
+                    let cortex_log = JSON.parse(log);
+
+                    if ('cortex_xdr' in cortex_log) {
+                        cortex_xdr = cortex_log['cortex_xdr'];
+                    } else {
+                        cortex_xdr = cortex_log['cortex_xsiam'];
+                        const target = cortex_xdr;
+                        for (const key in target) {
+                            if (Array.isArray(target[key]) && target[key].length === 1) {
+                                target[key] = target[key][0]; // 提取数组中的唯一元素
+                            }
+                        }
+                    }
+                    console.log(cortex_xdr);
+
+                    const { case_id, alert_id } = cortex_xdr;
                     cortex_url.push({ case_id: case_id, alert_id: alert_id });
                     process(cortex_xdr);
                 }, []);
@@ -5434,25 +5448,6 @@ function LLA_CS_AlertHandler(DecoderName, logsourcedomain) {
     }
 }
 
-function GGA_AlertHandler() {
-    const cachedMappingContent = GM_getValue('cachedMappingContent', null);
-
-    function generateDescription() {
-        var description = $('#description-val').text().trim();
-
-        if (!description.includes('details')) {
-            let kibana = $('#field-customfield_10308 .flooded').text().trim().split('\n')[0];
-            let newUrl = kibana.replace(
-                /https:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/,
-                'https://' + cachedMappingContent['gga_url']
-            );
-            description = '<b>Log Details:\n</b>' + description + '\n' + '<b>Kibana:</b>' + newUrl;
-            showDialog(description);
-        }
-    }
-    addButton('GGA', 'GGA', generateDescription);
-}
-
 function MMB_AlertHandler() {
     const cachedMappingContent = GM_getValue('cachedMappingContent', null);
 
@@ -6170,7 +6165,6 @@ function RealTimeMonitoring() {
                 'azuregraphapi-json': AzureGraphAlertHandler,
                 'paloalto-firewall': paloaltoAlertHandler,
                 'impervainc_cef': SangforAlertHandler,
-                // 'zscaler-zpa-json': ZscalerAlertHandler,
                 'pulse-secure': PulseAlertHandler,
                 'aws-guardduty': AwsAlertHandler,
                 'alicloud-json': AlicloudAlertHandler,
@@ -6209,7 +6203,8 @@ function RealTimeMonitoring() {
                 'checkpoint-infinity-portal-saas': CheckPointEmailHandler,
                 'aws-f5-waf': AwsAlertHandler,
                 'aws-waf': AwsAlertHandler,
-                'playtechevents': GoogleAlertHandler
+                'playtechevents': GoogleAlertHandler,
+                'cortex-xsiam-json': cortexAlertHandler
             };
             if (DecoderName.includes('m365-defender-json')) {
                 let decoder_name = [];
@@ -6395,9 +6390,7 @@ function RealTimeMonitoring() {
         if (LogSourceDomain.includes(cachedMappingContent['lla'])) {
             LLA_CS_AlertHandler(DecoderName, cachedMappingContent['lla']);
         }
-        if (LogSourceDomain.includes(cachedMappingContent['gga'])) {
-            GGA_AlertHandler();
-        }
+
         if (LogSourceDomain.includes(cachedMappingContent['mmb'])) {
             MMB_AlertHandler();
         }
