@@ -1509,7 +1509,7 @@ function cortexAlertHandler(...kwargs) {
                     if (Object.hasOwnProperty.call(info, key)) {
                         const value = info[key];
                         console.log(key, value);
-                        if (value !== undefined && value !== 'N/A' && !value.includes('dataset = xdr_data')) {
+                        if (value !== undefined && value !== 'N/A' && !value.includes('= xdr_')) {
                             if (key == 'event_evidence') {
                                 desc += `${key}: ${value.replace(/</g, '&lt;').replace(/>/g, '&gt;')}\n`;
                             } else {
@@ -6105,7 +6105,7 @@ function RealTimeMonitoring() {
                 }, 10000);
             }, 180000);
         }
-        if (window.location.href.includes('filter=13300')) {
+        if (window.location.href.includes('filter=13300') || window.location.href.includes('filter=15200')) {
             setInterval(() => {
                 notifyKey = [];
                 $('.aui-button.aui-button-primary.search-button').click();
