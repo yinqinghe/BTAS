@@ -794,8 +794,8 @@ function createNotifyControls() {
         const currentDate = new Date();
         const audioURL =
             currentDate.getHours() >= 9 && currentDate.getHours() < 21
-                ? 'https://gitee.com/aspirepig/aspirepig/raw/master/12221.wav'
-                : 'https://gitee.com/aspirepig/aspirepig/raw/master/alerts.wav';
+                ? 'https://static-file.mike.dpdns.org/12221.wav'
+                : 'https://static-file.mike.dpdns.org/alerts.wav';
         audioControl.html(`<audio id="myAudio" src="${audioURL}" type="audio/mpeg" controls></audio>`);
         parentNode.prepend(audioControl);
     }
