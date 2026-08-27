@@ -2082,14 +2082,23 @@ function SpemAlertHandler(...kwargs) {
                 }
                 logArray = log.split(',');
                 logArray[10] = 'Action:' + logArray[10];
-                console.log('===', logArray);
-                for (const index of logArray) {
-                    const [key, value] = index.split(/:(.+)/, 2);
-                    logObject[key] = value;
+                for (const item of logArray) {
+                    const trimmed = item.trim();
+                    // 排除以单字母盘符+斜杠开头的路径（如 c:\ 或 C:/）
+                    const match = trimmed.match(/^(?![a-zA-Z]:[\\\/])([^:]+):\s*(.*)$/);
+
+                    if (match) {
+                        logObject[match[1].trim()] = match[2].trim();
+                    } else if (trimmed) {
+                        // 没有 Key 的纯路径字段，可单独保存
+                        logObject['FilePath'] = trimmed;
+                    }
                 }
+                console.log('===', logObject);
                 acc.push({
                     'Summary': logObject['Event Description'] !== undefined ? logObject['Event Description'] : summary,
                     'time': logObject['Begin'],
+                    'Event time': logObject['Event time'],
                     'User Name': logObject['User Name'],
                     'Local Host IP': logObject['Local Host IP'],
                     'Local Port': logObject['Local Port'],
@@ -2097,7 +2106,14 @@ function SpemAlertHandler(...kwargs) {
                     'Remote Port': logObject['Remote Port'],
                     'Application': logObject['Application'],
                     'Intrusion URL': logObject['Intrusion URL'],
-                    'Action': logObject['Action']
+                    'Action': logObject['Action'],
+                    'Application hash': logObject['Application hash'],
+                    'Application name': logObject['Application name'],
+                    'Application type': logObject['Application type'],
+                    'Attack Chain Mitigation Detection': logObject['Attack Chain Mitigation Detection'],
+                    'IP Address': logObject['IP Address'],
+                    'User Name': logObject['User Name'],
+                    'FilePath': logObject['FilePath']
                 });
             } catch (error) {
                 console.log(`Error: ${error}`);
@@ -6204,7 +6220,8 @@ function RealTimeMonitoring() {
                 'aws-f5-waf': AwsAlertHandler,
                 'aws-waf': AwsAlertHandler,
                 'playtechevents': GoogleAlertHandler,
-                'cortex-xsiam-json': cortexAlertHandler
+                'cortex-xsiam-json': cortexAlertHandler,
+                'symantec-endpoint-protection': SpemAlertHandler
             };
             if (DecoderName.includes('m365-defender-json')) {
                 let decoder_name = [];
