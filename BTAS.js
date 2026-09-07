@@ -487,7 +487,7 @@ function registerSearchMenu() {
 
     let url = `${
         cachedEntry['hk']
-    }/issues/?jql=text ~ "%s" AND "Log Source Domain" ~ "%D" ${Host()} ORDER BY created DESC`;
+    }/issues/?jql=text ~ "%s" AND "Log Source Domain" ~ "%D" ${Host()} and project = mss ORDER BY created DESC`;
     if (window.location.href.includes(cachedEntry['macao'].split('//')[1])) {
         url = `${cachedEntry['macao']}/issues/?jql=text ~ "%s" ORDER BY created DESC`;
     }
@@ -3178,6 +3178,13 @@ function AlicloudAlertHandler(...kwargs) {
                             alertExtraInfo = Object.assign({}, alertExtraInfo, requestParameters);
                         }
                         let LogSource = $('#customfield_10204-val').text().trim();
+                        if (LogSource.includes('Hide')) {
+                            let results = LogSource.split('\n')
+                                .map((line) => line.trim()) // 去除每行首尾空格
+                                .filter((line) => line.startsWith('alicloud-')); // 筛选以 alicloud- 开头的行
+                            // 3. 去重并清洗多余尾随字符（如 "alicloud-cn-ddos "）
+                            LogSource = [...new Set(results.map((item) => item.split(/\s+/)[0]))];
+                        }
                         alertExtraInfo['Logsource'] = LogSource;
                         acc.push({ alertExtraInfo });
                     } catch (error) {
@@ -3958,7 +3965,7 @@ function MDE365AlertHandler(...kwargs) {
                                         console.log(processCommandLine);
                                     }
                                     let processEntry = {};
-                                    processEntry['File'] = `${evidenceItem['filePath']}\\\\${evidenceItem['fileName']}`;
+                                    processEntry['File'] = evidenceItem['filePath'];
                                     if (
                                         evidenceItem.processCommandLine !== undefined &&
                                         evidenceItem.processCommandLine.includes('EncodedCommand')
@@ -5325,13 +5332,25 @@ function SplunkAlertHandler(...kwargs) {
                 const patterns = {
                     time: /identifiedAt\s*:\s*(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/,
                     agentComputerName: /agentComputerName\s*:\s*([\w-]+)/,
+                    accountName: /accountName\s*:\s*([^,\s]+)/, // 租户/账号名称
+                    siteName: /siteName\s*:\s*([^,\s]+)/, // 站点名称
+                    groupName: /groupName\s*:\s*([^,\s]+)/,
+                    agentOsRevision: /agentOsRevision\s*:\s*([^,]+)/, // 操作系统详细版本
+                    externalIp: /externalIp\s*:\s*([\d.]+)/, // 代理公网/出口IP
                     processUser: /processUser\s*:\s*([^,]+)/,
                     threat: /description\s*:\s*([^,]+)/,
                     originator: /originatorProcess\s*:\s*([\w.]+)/,
                     cmd: /maliciousProcessArguments\s*:\s*([^,]+)/,
                     filePath: /filePath\s*:\s*([^,]+)/,
                     sha256: /sha256\s*:\s*([a-f0-9]{64})/,
-                    mitigationStatus: /mitigationStatusDescription\s*:\s*([^,]+)/
+                    mitigationStatus: /mitigationStatusDescription\s*:\s*([^,]+)/,
+                    classification: /classification\s*:\s*([^,\s]+)/, // 威胁分类（如挖矿程序）
+                    confidenceLevel: /confidenceLevel\s*:\s*([^,\s]+)/, // 可信度/置信度
+                    incidentStatus: /incidentStatusDescription\s*:\s*([^,\s]+)/, // 处置状态
+                    threatName: /threatName\s*:\s*([^,]+)/, // 威胁程序名称
+                    sha1: /sha1\s*:\s*([a-f0-9]{40})/, // 文件 SHA1 哈希
+                    fileSize: /fileSize\s*:\s*(\d+)/, // 文件大小(Byte)
+                    detectionType: /detectionType\s*:\s*([^,\s]+)/ // 检测类型（动态/静态）
                 };
 
                 let result = {};
@@ -6264,6 +6283,7 @@ function RealTimeMonitoring() {
                 'abnormally large outgoing accept traffic': FortigateAlertHandler,
                 'windows multiple accounts lockout within a short period': WineventAlertHandler,
                 'splunk alert:  sentinelone': SplunkAlertHandler,
+                'sentinelone medium severity alert ': SplunkAlertHandler,
                 'infrasys': GoogleAlertHandler,
                 'possible password spraying attacks': WineventAlertHandler,
                 'concurrent login attempt failure': WineventAlertHandler
@@ -6292,6 +6312,9 @@ function RealTimeMonitoring() {
             }
             if (LogSource.includes('aws-waf')) {
                 AwsAlertHandler({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: summary });
+            }
+            if (LogSource.includes('alicloud-cn-waf')) {
+                AlicloudAlertHandler({ LogSourceDomain: LogSourceDomain, rawLog: rawLog, summary: summary });
             }
             if (LogSourceDomain == '') {
                 LogSourceDomain = $('#customfield_10846-val').text().trim();
@@ -6437,6 +6460,7 @@ function RealTimeMonitoring() {
             const element = document.querySelector('#assign-to-me-trigger');
             if (element) {
                 document.getElementById('assign-to-me-trigger').click();
+                document.querySelector('li.js-sd-internal-comment').click();
                 clearInterval(interval2);
             }
         }, 100); // 每100毫秒检查一次
