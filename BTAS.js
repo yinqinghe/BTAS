@@ -588,6 +588,7 @@ function QuickReply() {
         <aui-item-radio interactive>Leaked Credentials</aui-item-radio>
 		<aui-item-radio interactive>Compromised Accounts</aui-item-radio>
 		<aui-item-radio interactive>Log resume</aui-item-radio>
+		<aui-item-radio interactive>Decommissioned agent</aui-item-radio>
 		<aui-item-radio interactive>关闭工单</aui-item-radio>
 		<aui-item-radio interactive>通知相关方</aui-item-radio> 
     </aui-section>
@@ -613,6 +614,8 @@ function QuickReply() {
             '<p>Dear Client,</p><p>Our Cyber Threat Intelligence investigated the incident and found&nbsp;&lt;Number&gt; compromised accounts related to your organisation exposed in dark web. The credentials are listed below:</p><table width="962" class="mce-item-table"><tbody><tr><td width="137"><div><p><strong>EMAIL/USERNAME</strong></p></div></td><td width="137"><div><p><strong>PASSWORD TYPE</strong></p></div></td><td width="137"><div><p><strong>PASSWORD</strong></p></div></td><td width="137"><div><p><strong>SOURCE</strong></p></div></td><td width="137"><div><p><strong>PRICE</strong></p></div></td><td width="137"><div><p><strong>POSTED DATE</strong></p></div></td><td width="137"><div><p><strong>SERVICE</strong></p></div></td></tr><tr><td width="137"><br data-mce-bogus="1"></td><td width="137"><br data-mce-bogus="1"></td><td width="137"><br data-mce-bogus="1"></td><td width="137"><br data-mce-bogus="1"></td><td width="137"><br data-mce-bogus="1"></td><td width="137"><br data-mce-bogus="1"></td><td width="137"><br data-mce-bogus="1"></td></tr></tbody></table><p>[Source Detail from Kela]</p><p>&lt;SOURCE Details/Description&gt;</p><p>[Service if disclose need check]</p><p>As per our open-source investigation through passive means, we observe that:</p><p>&lt; SERVICE&gt; appear to be &lt;SERVICE USAGE&gt;&nbsp;</p><p>[Recommendation]</p><p>We recommend confirming that the service coverage is to customers only, or whether it also includes staff and/or third-party, and evaluate if accounts with administrative privileges require a password change. &nbsp;We also recommend to heighten monitoring of customer login to indicate anomalies in location or timing, and review password policies and evaluate if there is a need to strengthen (e.g., mandate password rotation regularly). A further recommendation is to reach out to these account holders if the accounts are still active, and request that they change their passwords.</p><p>Please do not hesitate to reach out to us if you have any queries. Thank you.</p><p>Best Regards,<br>Cyber Threat Intelligence Team</p>',
         'Log resume':
             'Dear Customer,<br>Thanks for your reply, <br>Log resumed, we will close this ticket.<br>Best Regards.',
+        'Decommissioned agent':
+            'Dear Customer,<br>Thank you for confirming the affected endpoint WINDCSRV1, WINDCSRV2 has been decommissioned.<br>As a standard housekeeping measure, our SIEM will retain the disconnected agent record for up to **100 days** from the last successful check-in.<br>- If the agent reconnects within the 100-day window, the endpoint may re-enter our monitoring scope.<br>- After **100 days** of continuous disconnection, the agent/endpoint entry will be removed from our SIEM monitoring scope.<br>We will close this ticket now. If you have any questions, please reopen the ticket and let us know.',
         'Agent recover':
             'Dear Customer,<br>Thanks for your reply,<br>The agent is now active and we will close this case<br>Best Regards.',
         '关闭工单': '尊敬的客户，<br>感谢您的回复，我们将关闭此工单。 <br>祝您生活愉快。<br>',
@@ -2154,10 +2157,14 @@ function AwsAlertHandler(...kwargs) {
                     return acc;
                 }
                 const { aws } = JSON.parse(log);
-                if (DecoderName == 'aws-f5-waf') {
+                if (
+                    DecoderName == 'aws-f5-waf' ||
+                    summary.toLowerCase().includes('excessive web attack attempt with access denied')
+                ) {
                     acc.push({
                         EventTime: aws?.time.split('.')[0],
                         method: aws?.method,
+                        domain: aws?.domain,
                         req_path: aws?.req_path,
                         src_ip: aws?.src_ip,
                         src_port: aws?.src_port,
@@ -2165,7 +2172,8 @@ function AwsAlertHandler(...kwargs) {
                         dst_port: aws?.dst_port,
                         rsp_code: aws?.rsp_code,
                         response_flags: aws?.response_flags,
-                        user_agent: aws?.user_agent
+                        user_agent: aws?.user_agent,
+                        recommended_action: aws?.recommended_action
                     });
                     return acc;
                 }
@@ -2956,7 +2964,11 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             AffectedItems,
                             Folders,
                             ForwardingSmtpAddress,
-                            AppPoolName
+                            AppPoolName,
+                            ObjectId,
+                            From,
+                            MoveToFolder,
+                            Name
                         } = json_alert['office_365'];
                         let devicename = '';
                         if (DeviceProperties) {
@@ -2990,6 +3002,9 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             Operation: Operation ? Operation : undefined,
                             Workload: Workload ? Workload : undefined,
                             AppPoolName: AppPoolName ? AppPoolName : undefined,
+                            From: From ? From : undefined,
+                            MoveToFolder: MoveToFolder ? MoveToFolder : undefined,
+                            Name: Name ? Name : undefined,
                             UserId: UserId ? UserId : undefined,
                             ClientIP: ClientIP ? ClientIP : undefined,
                             ClientIPAddress: ClientIPAddress ? ClientIPAddress : undefined,
@@ -3001,6 +3016,7 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             ForwardingSmtpAddress: ForwardingSmtpAddress ? ForwardingSmtpAddress : undefined,
                             ResultStatusDetail: ResultStatusDetail || undefined,
                             ResultStatus: ResultStatus || undefined,
+                            ObjectId: ObjectId || undefined,
                             AffectedItem: unique || undefined
                         };
                     }
@@ -3965,7 +3981,7 @@ function MDE365AlertHandler(...kwargs) {
                                         console.log(processCommandLine);
                                     }
                                     let processEntry = {};
-                                    processEntry['File'] = evidenceItem['filePath'];
+                                    processEntry['File'] = `${evidenceItem.filePath}\\\\${evidenceItem.fileName}`;
                                     if (
                                         evidenceItem.processCommandLine !== undefined &&
                                         evidenceItem.processCommandLine.includes('EncodedCommand')
@@ -4008,8 +4024,11 @@ function MDE365AlertHandler(...kwargs) {
                         alert_single['description'] = alert['description'] || undefined;
                         alerts.push(alert_single);
                         let creationTime = GMT8(logObj['mde']['alertCreationTime'].split('.')[0]);
+                        let lastEventTime = GMT8(logObj['mde']['lastEventTime'].split('.')[0]);
+
                         alertInfo_MDE.push({
                             creationTime: creationTime,
+                            lastEventTime: lastEventTime,
                             Host: logObj['mde'].computerDnsName,
                             summary: logObj['mde'].title,
                             alerts: alerts,
@@ -4217,8 +4236,8 @@ function MDE365AlertHandler(...kwargs) {
                     } else {
                         if (!invalidValues.includes(info[key]) && !excludedKeys.has(key)) {
                             console.log('===MDE', key, info[key]);
-                            if (key == 'creationTime') {
-                                desc += `creationTime(<span class="red_highlight">GMT+8</span>): ${info[key]}\n`;
+                            if (key == 'creationTime' || key == 'lastEventTime') {
+                                desc += `${key}(<span class="red_highlight">GMT+8</span>): ${info[key]}\n`;
                             } else {
                                 desc += `${key}: ${info[key]}\n`;
                                 if (key == 'Host') {
@@ -5164,7 +5183,27 @@ function GoogleAlertHandler(...kwargs) {
                         IpAddress: PTSE.IpAddress
                     };
                     acc.push(result);
-                    console.log('===', acc);
+                }
+                if (DecoderName == 'aws-keycloak') {
+                    // console.log('===message', log);
+                    let aws_message = JSON.parse(log)['aws']['message'];
+                    let message = JSON.parse(aws_message)['message'];
+                    aws_message = JSON.parse(aws_message);
+                    console.log('===message', aws_message);
+                    const regex = /(\w+)="([^"]*)"/g;
+
+                    // 使用 matchAll 获取所有匹配项并转换为对象
+                    let parsedData = Object.fromEntries(
+                        [...message.matchAll(regex)].map((match) => [match[1], match[2]])
+                    );
+                    result = {
+                        timestamp: aws_message['timestamp'].split('.')[0], // 添加时间字段（ISO 8601 格式）
+                        hostName: aws_message['hostName'],
+                        processName: aws_message['processName'],
+                        ...parsedData // 展开之前解析好的字典
+                    };
+                    console.log(result);
+                    acc.push(result);
                 }
                 if (summary.toLocaleLowerCase().includes('infrasys')) {
                     let infrasys = JSON.parse(log)['infrasys'];
@@ -5524,6 +5563,115 @@ function MMB_AlertHandler() {
         console.log('===', start);
     }
     addButton('MMA', 'MMA', generateDescription);
+}
+
+function WebAttackAlertHandler(...kwargs) {
+    const { rawLog, summary } = kwargs[0];
+    var raw_alert = 0;
+    function parseLog(rawLog) {
+        const alertInfo = rawLog.reduce((acc, log) => {
+            try {
+                if (log.length == 0) {
+                    return acc;
+                }
+                let result = '';
+                const jsonString = log.match(/{.*}/);
+                if (jsonString) {
+                    result = JSON.parse(jsonString);
+                }
+                console.log('===result', result);
+                if (Object.hasOwn(result, 'aws')) {
+                    const aws = result['aws'];
+                    acc.push({
+                        'EventTime': formatCurrentDateTime(aws?.timestamp, 'xxx'),
+                        'action': aws?.action || aws?.action,
+                        'clientIp': aws?.httpRequest?.clientIp,
+                        'country': aws?.httpRequest?.country,
+                        'uri': aws?.httpRequest?.uri,
+                        'host': aws?.httpRequest?.host,
+                        'domain': aws?.domain,
+                        'src_ip': aws?.src_ip,
+                        'dst_ip': aws?.dst_ip,
+                        'dst_port': aws?.dst_port,
+                        'req_path': aws?.req_path,
+                        'req_size': aws?.req_size,
+                        'rsp_code': aws?.rsp_code,
+                        'user_agent': aws?.user_agent,
+                        'x_forwarded_for': aws?.x_forwarded_for,
+
+                        'original_referer': aws?.original_referer,
+                        'User-Agent': Array.isArray(aws?.httpRequest?.headers)
+                            ? aws.httpRequest.headers.find((h) => h.name.toLowerCase() === 'user-agent')?.value
+                            : Object.entries(aws?.httpRequest?.headers || {}).find(
+                                  ([k]) => k.toLowerCase() === 'user-agent'
+                              )?.[1],
+                        'Referer': Array.isArray(aws?.httpRequest?.headers)
+                            ? aws.httpRequest.headers.find((h) => h.name.toLowerCase() === 'referer')?.value
+                            : Object.entries(aws?.httpRequest?.headers || {}).find(
+                                  ([k]) => k.toLowerCase() === 'referer'
+                              )?.[1]
+                    });
+                }
+                if (Object.hasOwn(result, 'alicloud')) {
+                    const alicloud = result['alicloud'];
+                    acc.push({
+                        EventTime: alicloud.time,
+                        request_uri: alicloud.request_uri,
+                        host: alicloud.host,
+                        status: alicloud.status,
+                        body_bytes_sent: alicloud.body_bytes_sent,
+                        src_ip: alicloud.src_ip,
+                        http_user_agent: alicloud.http_user_agent,
+                        http_referer: alicloud.http_referer,
+                        request_method: alicloud.request_method,
+                        user_id: alicloud.user_id,
+                        content_type: alicloud.content_type,
+                        final_action: alicloud.final_action
+                    });
+                }
+                raw_alert += 1;
+            } catch (error) {
+                console.log(`Error: ${error}`);
+            }
+            return acc;
+        }, []);
+        return alertInfo;
+    }
+    const alertInfo = parseLog(rawLog);
+    const num_alert = $('#customfield_10300-val').text().trim();
+    if (raw_alert < num_alert) {
+        AJS.banner({
+            body: `Number Of Alert : ${num_alert}, Raw Log Alert : ${raw_alert} Raw log information is Not Complete, Please Get More Alert Information From Elastic.\n`
+        });
+    }
+    function generateDescription() {
+        let alertDescriptions = [];
+        let desc = `Observed ${summary.split(']').at(-1)}\n`;
+        if (summary.toLocaleLowerCase().includes('gems2')) {
+            alertDescriptions = aggregateDescription(alertInfo, desc);
+        } else {
+            for (const info of alertInfo) {
+                desc = `Observed ${summary.split(']').at(-1)}\n`;
+                if (typeof info === 'object') {
+                    Object.entries(info).forEach(([index, value]) => {
+                        if (value !== undefined) {
+                            if (index == 'createtime') {
+                                desc += `<strong>createtime(<span class="red_highlight">GMT</span>):</strong> ${value}\n`;
+                            } else {
+                                desc += `<strong>${index}:</strong> ${value}\n`;
+                            }
+                        }
+                    });
+                } else {
+                    desc += info + '\n';
+                }
+                alertDescriptions.push(desc);
+            }
+        }
+        const alertMsg = [...new Set(alertDescriptions)].join('\n');
+        showDialog(alertMsg);
+    }
+    addButton('generateDescription', 'Description', generateDescription);
 }
 
 function RealMonitorMe() {
@@ -6240,7 +6388,8 @@ function RealTimeMonitoring() {
                 'aws-waf': AwsAlertHandler,
                 'playtechevents': GoogleAlertHandler,
                 'cortex-xsiam-json': cortexAlertHandler,
-                'symantec-endpoint-protection': SpemAlertHandler
+                'symantec-endpoint-protection': SpemAlertHandler,
+                'aws-keycloak': GoogleAlertHandler
             };
             if (DecoderName.includes('m365-defender-json')) {
                 let decoder_name = [];
@@ -6286,7 +6435,8 @@ function RealTimeMonitoring() {
                 'sentinelone medium severity alert ': SplunkAlertHandler,
                 'infrasys': GoogleAlertHandler,
                 'possible password spraying attacks': WineventAlertHandler,
-                'concurrent login attempt failure': WineventAlertHandler
+                'concurrent login attempt failure': WineventAlertHandler,
+                'excessive web attack attempt with access denied': WebAttackAlertHandler
             };
             let No_Decoder_handler = null;
             Object.keys(No_Decoder_handlers).forEach((key) => {
