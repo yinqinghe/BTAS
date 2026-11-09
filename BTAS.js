@@ -3759,11 +3759,12 @@ function SangforAlertHandler(...kwargs) {
         for (const info of alertInfo) {
             const lastindex = summary.lastIndexOf(']');
             let desc = '';
-            if (summary.includes('-')) {
+            if (summary.includes('- ')) {
                 desc += `Observed ${summary.substring(summary.indexOf('-', lastindex) + 1).trim()}\n`;
             } else {
                 desc += `Observed ${summary.substr(lastindex + 1)}\n`;
             }
+            console.log('===', desc);
             for (const key in info) {
                 if (Object.hasOwnProperty.call(info, key)) {
                     const value = info[key];
@@ -5163,7 +5164,6 @@ function GoogleAlertHandler(...kwargs) {
                         protection: runtime.protection
                     };
                     acc.push(result);
-                    console.log('===', acc);
                 }
                 if (DecoderName == 'playtechsecurityevents') {
                     let PTSE = JSON.parse(log)['PlayTechSecurityEvents'];
@@ -5201,6 +5201,23 @@ function GoogleAlertHandler(...kwargs) {
                         hostName: aws_message['hostName'],
                         processName: aws_message['processName'],
                         ...parsedData // 展开之前解析好的字典
+                    };
+
+                    acc.push(result);
+                }
+                if (DecoderName == 'okta') {
+                    let okta = JSON.parse(log)['okta'];
+                    result = {
+                        'timestamp(GMT)': okta['published'].split('.')[0], // 添加时间字段（ISO 8601 格式）
+                        'displayMessage': okta.displayMessage,
+                        'eventType': okta.eventType,
+                        'result': okta.outcome.result,
+                        'requestUri': okta.debugContext.debugData.requestUri,
+                        'userAgent': okta.client.userAgent.rawUserAgent,
+                        'ipAddress': okta.client.ipAddress,
+                        'city': okta.client.geographicalContext.city,
+                        'country': okta.client.geographicalContext.country,
+                        'uuid': okta.uuid
                     };
                     console.log(result);
                     acc.push(result);
@@ -6389,7 +6406,8 @@ function RealTimeMonitoring() {
                 'playtechevents': GoogleAlertHandler,
                 'cortex-xsiam-json': cortexAlertHandler,
                 'symantec-endpoint-protection': SpemAlertHandler,
-                'aws-keycloak': GoogleAlertHandler
+                'aws-keycloak': GoogleAlertHandler,
+                'okta': GoogleAlertHandler
             };
             if (DecoderName.includes('m365-defender-json')) {
                 let decoder_name = [];
