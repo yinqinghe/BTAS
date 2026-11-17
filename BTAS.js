@@ -491,11 +491,6 @@ function registerSearchMenu() {
     if (window.location.href.includes(cachedEntry['macao'].split('//')[1])) {
         url = `${cachedEntry['macao']}/issues/?jql=text ~ "%s" ORDER BY created DESC`;
     }
-    if (window.location.href.includes(cachedEntry['nyx'].split('//')[1])) {
-        url = `${
-            cachedEntry['nyx']
-        }/issues/?jql=text ~ "%s" AND "Log Source Domain" ~ "%D" ${Host()} ORDER BY created DESC`;
-    }
     console.log('===url', url);
 
     const searchEngines = [
@@ -724,13 +719,6 @@ function ToWhitelist() {
             window.open(`${cachedEntry['hk']}/plugins/servlet/desk/portal/2/create/206`, '_blank');
         }
     }
-    if (window.location.href.includes(cachedEntry['nyx'])) {
-        if (summary.toLowerCase().includes('agent disconnected')) {
-            window.open(`${cachedEntry['nyx']}/plugins/servlet/desk/portal/2/create/451`, '_blank');
-        } else {
-            window.open(`${cachedEntry['nyx']}/plugins/servlet/desk/portal/2/create/206`, '_blank');
-        }
-    }
 }
 
 /**
@@ -898,9 +886,6 @@ function fetchData(url, apiKey) {
                     if (item && item['name'] == 'macao' && item['url']) {
                         cachedEntry['macao'] = item['url'];
                     }
-                    if (item && item['name'] == 'nyx' && item['url']) {
-                        cachedEntry['nyx'] = item['url'];
-                    }
                     GM_setValue('cachedEntry', cachedEntry);
                 });
                 GM_setValue('cachedMappingContent', data['mapping']);
@@ -1028,6 +1013,29 @@ function ticketNotify(pageData) {
             None: ''
         };
         const searchStrings = [];
+        function showPopup(msg) {
+            $('.popup-bg').remove(); // 移除旧弹窗
+            const popup = $(`
+                <div class="popup-bg" style="
+                position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+                background:rgba(0,0,0,0.5);z-index:9999;">
+                <div style="
+                    background:#fff;padding:40px 50px;border-radius:10px;
+                    text-align:center;font-size:20px;box-shadow:0 0 20px rgba(0,0,0,0.3);">
+                    <div>${msg}</div>
+                    <div style="margin-top:25px;">
+                    <button class="ok" style="font-size:18px;padding:8px 20px;margin:0 10px;">确定</button>
+                    <button class="cancel" style="font-size:18px;padding:8px 20px;margin:0 10px;">取消</button>
+                    </div>
+                </div>
+                </div>
+            `);
+            $('body').append(popup);
+            popup.find('.ok, .cancel').on('click', () => popup.remove());
+            popup.on('click', (e) => {
+                if (e.target === popup[0]) popup.remove();
+            });
+        }
 
         // 查找并高亮指定字符串的函数
         function highlightTextInElement(selector, searchStrings) {
@@ -1132,7 +1140,6 @@ function ticketNotify(pageData) {
         let projectMap = {};
         projectMap[cachedEntry['hk'].split('//')[1]] = 'HK';
         projectMap[cachedEntry['macao'].split('//')[1]] = 'MO';
-        projectMap[cachedEntry['nyx'].split('//')[1]] = 'HK';
 
         for (const notify of Notifydict) {
             const { ticketname, starttime, endtime, message, properties, button, status, project } = notify;
@@ -1151,6 +1158,11 @@ function ticketNotify(pageData) {
                     $(clickButton).on('click', () => {
                         showFlag('warning', `${ticketname}`, `${message.replace(/\r?\n/g, '<br>')}`, 'manual');
                     });
+                    let cloud_condition = `${pageData['DecoderName']} ${pageData['LogSourceLocation']}`.toLowerCase();
+
+                    if (button == 'Edit') {
+                        showPopup(message.replace(/\r?\n/g, '<br>'));
+                    }
                 }
 
                 let selector;
@@ -2102,6 +2114,7 @@ function SpemAlertHandler(...kwargs) {
                     'Summary': logObject['Event Description'] !== undefined ? logObject['Event Description'] : summary,
                     'time': logObject['Begin'],
                     'Event time': logObject['Event time'],
+                    'Computer name': logObject['Computer name'],
                     'User Name': logObject['User Name'],
                     'Local Host IP': logObject['Local Host IP'],
                     'Local Port': logObject['Local Port'],
@@ -2115,7 +2128,7 @@ function SpemAlertHandler(...kwargs) {
                     'Application type': logObject['Application type'],
                     'Attack Chain Mitigation Detection': logObject['Attack Chain Mitigation Detection'],
                     'IP Address': logObject['IP Address'],
-                    'User Name': logObject['User Name'],
+                    'Allowed application reason': logObject['Allowed application reason'],
                     'FilePath': logObject['FilePath']
                 });
             } catch (error) {
@@ -2968,7 +2981,7 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             ObjectId,
                             From,
                             MoveToFolder,
-                            Name
+                            Parameters
                         } = json_alert['office_365'];
                         let devicename = '';
                         if (DeviceProperties) {
@@ -2993,6 +3006,9 @@ function Risky_Countries_AlertHandler(...kwargs) {
                                 InternetMessageId: item.InternetMessageId
                             }));
                         }
+                        const Parameters_dict = Object.fromEntries(
+                            Parameters?.map((item) => [item.Name, item.Value]) ?? []
+                        );
                         const unique = items.filter(
                             (item, index, self) =>
                                 index === self.findIndex((t) => JSON.stringify(t) === JSON.stringify(item))
@@ -3004,7 +3020,6 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             AppPoolName: AppPoolName ? AppPoolName : undefined,
                             From: From ? From : undefined,
                             MoveToFolder: MoveToFolder ? MoveToFolder : undefined,
-                            Name: Name ? Name : undefined,
                             UserId: UserId ? UserId : undefined,
                             ClientIP: ClientIP ? ClientIP : undefined,
                             ClientIPAddress: ClientIPAddress ? ClientIPAddress : undefined,
@@ -3017,7 +3032,8 @@ function Risky_Countries_AlertHandler(...kwargs) {
                             ResultStatusDetail: ResultStatusDetail || undefined,
                             ResultStatus: ResultStatus || undefined,
                             ObjectId: ObjectId || undefined,
-                            AffectedItem: unique || undefined
+                            AffectedItem: unique || undefined,
+                            ...Parameters_dict
                         };
                     }
 
@@ -5800,9 +5816,6 @@ function MonitorDev() {
         if (window.location.href.includes(cachedEntry['hk'])) {
             window.location.href = `${cachedEntry['hk']}/browse/` + window.location.href.split('portal/2/')[1];
         }
-        if (window.location.href.includes(cachedEntry['nyx'])) {
-            window.location.href = `${cachedEntry['nyx']}/browse/` + window.location.href.split('portal/2/')[1];
-        }
 
         localStorage.setItem('Dev_link', window.location.href.split('portal/2/')[1]);
     }
@@ -6527,14 +6540,12 @@ function RealTimeMonitoring() {
             RawLog,
             AgentName,
             Description,
-            SourceIP;
+            SourceIP,
+            LogSourceLocation;
 
         let cachedEntry = GM_getValue('cachedEntry', null);
         Description = $('#description-val').text().trim();
-        if (
-            window.location.host === cachedEntry['hk'].split('//')[1] ||
-            window.location.host === cachedEntry['nyx'].split('//')[1]
-        ) {
+        if (window.location.host === cachedEntry['hk'].split('//')[1]) {
             // for HK
             LogSourceDomain = $('#customfield_10223-val').text().trim();
             Source = $('#customfield_10113-val').text().trim();
@@ -6561,6 +6572,7 @@ function RealTimeMonitoring() {
             AgentName = $('#customfield_10802-val').text().trim();
             SourceIP = $('#customfield_10859-val').text().trim();
         }
+        LogSourceLocation = $('#customfield_10806-val').text().trim();
 
         const pageData = {
             LogSourceDomain,
@@ -6574,7 +6586,8 @@ function RealTimeMonitoring() {
             Summary: summary,
             AgentName,
             Description,
-            SourceIP
+            SourceIP,
+            LogSourceLocation
         };
 
         // If it pops up once, it will not be reminded again
