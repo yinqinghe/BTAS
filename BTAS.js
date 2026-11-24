@@ -2423,19 +2423,25 @@ function AzureAlertHandler(...kwargs) {
                 acc.push({
                     AlertType: eventhub['AlertType'],
                     StartTimeUtc: eventhub['StartTimeUtc'],
-                    timeStamp: eventhub['timeStamp'],
+                    timeStamp: eventhub['timeStamp'] || eventhub['time'],
                     Severity: eventhub['Severity'],
                     Intent: eventhub['Intent'],
                     Description: eventhub['Description'],
                     summary: azure['ThreatDescription'] || eventhub['AlertDisplayName'],
                     Protocol: azure['Protocol'],
                     clientIp: azure['clientIp'],
-                    SourceIP: azure['SourceIp'],
+                    SourceIP: azure['SourceIp'] || azure['sourceIPAddress'],
                     SourcePort: azure['SourcePort'],
                     DestinationIp: azure['DestinationIp'],
                     DestinationPort: azure['DestinationPort'],
                     URL: azure['Url'],
                     Action: azure['Action'],
+                    requestParams: azure['requestParams'],
+                    response: azure['response'],
+                    Host: eventhub['Host'],
+                    identity: eventhub['identity'],
+                    operationName: eventhub['operationName'],
+                    resourceId: eventhub['resourceId'],
                     ExtendedProperties: JSON.stringify(ExtendedProperties, null, 4),
                     ...entities,
                     alerturi: eventhub['AlertUri'],
@@ -2459,7 +2465,6 @@ function AzureAlertHandler(...kwargs) {
     }
 
     const alertInfo = parseLog(rawLog);
-    console.log('===', alertInfo);
     function generateDescription() {
         const alertDescriptions = [];
         for (const info of alertInfo) {
@@ -3537,7 +3542,6 @@ function SangforAlertHandler(...kwargs) {
                 }
                 console.log(matches);
                 var pattern = /event_evidence.*?(?=suffer_classify1_id_name)/g;
-                // console.log(log.match(pattern));
                 let logArray = log.split(' ').filter((item) => item !== ''); //Remove extra whitespace from the string
                 if (DecoderName == 'cyberark_cef') {
                     let data_json = {
@@ -3769,9 +3773,6 @@ function SangforAlertHandler(...kwargs) {
     function generateDescription() {
         const cachedMappingContent = GM_getValue('cachedMappingContent', null);
         const alertDescriptions = [];
-        if (LogSourceDomain == cachedMappingContent['gga']) {
-            alertDescriptions.push(`Log Details:\n`);
-        }
         for (const info of alertInfo) {
             const lastindex = summary.lastIndexOf(']');
             let desc = '';
@@ -3797,14 +3798,6 @@ function SangforAlertHandler(...kwargs) {
             }
 
             alertDescriptions.push(desc);
-        }
-        if (LogSourceDomain == cachedMappingContent['gga']) {
-            let kibana = $('#field-customfield_10308').text().trim().split(' ')[36];
-            let newUrl = kibana.replace(
-                /https:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/,
-                'https://' + cachedMappingContent['gga_url']
-            );
-            alertDescriptions.push(`\n${newUrl}\n`);
         }
         const alertMsg = [...new Set(alertDescriptions)].join('\n');
         showDialog(alertMsg);
@@ -5661,6 +5654,32 @@ function WebAttackAlertHandler(...kwargs) {
                         content_type: alicloud.content_type,
                         final_action: alicloud.final_action
                     });
+                }
+                const regex = /(\b\w+=)([^=\s].*?)(?=\s+\w+=|$)/g;
+                let match;
+                const matches = {};
+                while ((match = regex.exec(log)) !== null) {
+                    let item = match[0].split('=');
+                    matches[item[0]] = item.slice(1, item.length).join('=');
+                }
+                if (log.includes('Incapsula')) {
+                    let data_json = {
+                        requestClientApplication: matches.requestClientApplication
+                            ? matches.requestClientApplication
+                            : undefined,
+                        request: matches.request ? matches.request : undefined,
+                        requestMethod: matches.requestMethod ? matches.requestMethod : undefined,
+                        postbody: matches.postbody ? matches.postbody : undefined,
+                        qstr: matches.qstr ? matches.qstr : undefined,
+                        act: matches.act ? matches.act : undefined,
+                        sip: matches.sip ? matches.sip : undefined,
+                        spt: matches.spt ? matches.spt : undefined,
+                        xff: matches.xff ? matches.xff : undefined,
+                        cpt: matches.cpt ? matches.cpt : undefined,
+                        src: matches.src ? matches.src : undefined
+                    };
+                    data_json[matches.cs9Label] = matches.cs9 ? matches.cs9 : undefined;
+                    acc.push(data_json);
                 }
                 raw_alert += 1;
             } catch (error) {
