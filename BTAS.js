@@ -2,7 +2,7 @@
 // @name         BTAS
 // @namespace    https://github.com/yinqinghe/BTAS
 // @homepageURL  https://github.com/yinqinghe/BTAS
-// @version      5.1.9
+// @version      5.2.0
 // @description  Blue Team Auxiliary Script
 // @author       Barry, Jack, Xingyu, Mike
 // @license      Apache-2.0
@@ -6404,7 +6404,7 @@ function RealTimeMonitoring() {
                 'sangfor_cef': SangforAlertHandler,
                 'cyberark_cef': SangforAlertHandler,
                 'office-365': Risky_Countries_AlertHandler,
-                'fireeye': FireeyeAlertHandler,
+                // 'fireeye': FireeyeAlertHandler,
                 'web-accesslog': WebAccesslogAlertHandler,
                 'checkpoint_cef': SangforAlertHandler,
                 'incapsula_cef': SangforAlertHandler,
@@ -6414,7 +6414,7 @@ function RealTimeMonitoring() {
                 'trellix_cef': SangforAlertHandler,
                 // 'sangfor': SangforAlertHandler,
                 'checkpoint-harmony-email-saas': CheckPointEmailHandler,
-                'nnt_cef': SangforAlertHandler,
+                // 'nnt_cef': SangforAlertHandler,
                 'netskope': NetsKopeAlertHandler,
                 'trendmicro_cef': SangforAlertHandler,
                 'forcepoint_cef': SangforAlertHandler,
